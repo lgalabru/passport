@@ -1,0 +1,19 @@
+[package]
+name = "passport-document"
+description = "Shared vocabulary for identity-document drivers: claims, evidence, challenges and the Driver trait (no_std + alloc)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+# Off for the Flipper build: `no_std` + `alloc`.
+std = []
+
+[dependencies]
+
+[lints]
+workspace = true

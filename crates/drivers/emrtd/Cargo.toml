@@ -1,0 +1,24 @@
+[package]
+name = "passport-driver-emrtd"
+description = "eMRTD reading: BAC, secure messaging, the read state machine and DG decoding (no_std + alloc)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+# Off for the Flipper build: `no_std` + `alloc`.
+std = ["passport-document/std"]
+
+[dependencies]
+passport-document = { workspace = true }
+# Not the workspace entry: that one has default features, which pull in `std`.
+thiserror = { version = "2", default-features = false }
+des = { workspace = true }
+sha1 = { workspace = true }
+
+[lints]
+workspace = true

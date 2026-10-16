@@ -1,0 +1,67 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cli",
+    "crates/core",
+    "crates/document",
+    "crates/drivers/*",
+    "crates/flipper",
+    "crates/integration",
+    "crates/mcp",
+    "crates/types",
+]
+default-members = ["crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/lgalabru/passport"
+authors = ["Ludovic Galabru <ludo.galabru@solana.org>"]
+rust-version = "1.88"
+
+[workspace.dependencies]
+passport-types = { version = "0.1.0", path = "crates/types" }
+passport-core = { version = "0.1.0", path = "crates/core" }
+passport-mcp = { version = "0.1.0", path = "crates/mcp" }
+passport-document = { version = "0.1.0", path = "crates/document", default-features = false }
+passport-driver-emrtd = { version = "0.1.0", path = "crates/drivers/emrtd", default-features = false }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+yaml_serde = "0.10"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+console = "0.16"
+indicatif = "0.18"
+dirs = "6"
+# USB serial link to the Flipper (no libudev: port names are enough)
+serialport = { version = "4", default-features = false }
+rmcp = { version = "3.5", features = ["server", "transport-io", "schemars"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = "3"
+# no_std crypto for the eMRTD reader (used with default features off)
+des = { version = "0.9", default-features = false }
+sha1 = { version = "0.11", default-features = false }
+# Flipper Zero (SDK API 87.1). Only built for `thumbv7em-none-eabihf`.
+flipperzero = { version = "0.16", default-features = false, features = ["alloc"] }
+flipperzero-sys = "0.16"
+flipperzero-rt = "0.16"
+flipperzero-alloc = "0.16"
+
+[workspace.lints.clippy]
+all = "warn"
+
+# Flipper Zero: STM32WB55, 256 KB RAM, 2 KB app stack. Optimise for size and
+# never unwind into the firmware. A separate profile so the CLI's `release`
+# build is unaffected: `cargo build --profile flipper --target thumbv7em-none-eabihf`.
+[profile.flipper]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = false

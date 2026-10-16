@@ -1,0 +1,23 @@
+[package]
+name = "passport-flipper"
+description = "Flipper Zero front end: scenes, NFC transport and storage around the eMRTD reader"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+passport-driver-emrtd = { workspace = true }
+
+# On-device only: the screens, NFC and storage glue. The host build keeps just
+# the pure logic (session, screens, flow), which is what the tests cover.
+[target.'cfg(target_os = "none")'.dependencies]
+flipperzero = { workspace = true }
+flipperzero-sys = { workspace = true }
+flipperzero-rt = { workspace = true }
+flipperzero-alloc = { workspace = true }

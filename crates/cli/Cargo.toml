@@ -1,0 +1,28 @@
+[package]
+name = "passport"
+description = "passport CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "passport"
+path = "src/main.rs"
+
+[dependencies]
+passport-core = { workspace = true }
+passport-driver-emrtd = { workspace = true, features = ["std"] }
+passport-mcp = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+clap_complete = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+dirs = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,17 @@
+[package]
+name = "passport-integration"
+description = "End-to-end tests: the eMRTD reader against a simulated chip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dev-dependencies]
+passport-driver-emrtd = { workspace = true, features = ["std"] }
+proptest = "1"
+
+[lints]
+workspace = true
