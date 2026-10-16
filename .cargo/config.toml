@@ -1,0 +1,9 @@
+# Flipper Zero build flags. Scoped to the device target: host builds (the CLI,
+# MCP server and every test) are not affected.
+[target.thumbv7em-none-eabihf]
+rustflags = [
+    # STM32WB55
+    "-C", "target-cpu=cortex-m4",
+    # The loader wants a relocatable object laid out by the runtime's script.
+    "-C", "link-args=--script=flipperzero-rt.ld --Bstatic --relocatable --discard-all --strip-all",
+]

@@ -1,0 +1,25 @@
+[package]
+name = "passport-core"
+description = "Config, setup and Flipper scan logic behind the passport CLI and MCP server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+passport-types = { workspace = true }
+passport-driver-emrtd = { workspace = true, features = ["std"] }
+serialport = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+yaml_serde = { workspace = true }
+thiserror = { workspace = true }
+dirs = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
