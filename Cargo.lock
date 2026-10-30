@@ -5439,6 +5439,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "passport_rsa2048"
+version = "0.1.0"
+dependencies = [
+ "num-bigint 0.4.8",
+ "passport-gadget-rsa",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+ "rsa",
+ "sha2 0.10.9",
+ "xark",
+ "xark-prover",
+]
+
+[[package]]
 name = "passport_sha1"
 version = "0.1.0"
 dependencies = [
@@ -12882,7 +12896,7 @@ dependencies = [
 [[package]]
 name = "xark"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
@@ -12892,7 +12906,7 @@ dependencies = [
 [[package]]
 name = "xark-backend"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -12918,7 +12932,7 @@ dependencies = [
 [[package]]
 name = "xark-bignum"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "xark",
  "xark-prover",
@@ -12927,7 +12941,7 @@ dependencies = [
 [[package]]
 name = "xark-bits"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "xark",
 ]
@@ -12935,7 +12949,7 @@ dependencies = [
 [[package]]
 name = "xark-ir"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
@@ -12950,7 +12964,7 @@ dependencies = [
 [[package]]
 name = "xark-macros"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12960,7 +12974,7 @@ dependencies = [
 [[package]]
 name = "xark-prover"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -12977,7 +12991,7 @@ dependencies = [
 [[package]]
 name = "xark-verifier"
 version = "0.2.1"
-source = "git+https://github.com/blueshift-gg/xark?rev=74817fa#74817fa37b17cf712abad40a5200adfd2643001c"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
 dependencies = [
  "solana-nostd-alt-bn128",
  "solana-program-error 3.0.1",
@@ -13162,3 +13176,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "xark-sha256"
+version = "0.2.1"
+source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"

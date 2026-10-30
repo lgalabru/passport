@@ -180,6 +180,96 @@ pub fn pkcs1v15_sha256_verify_1024(sig: [Field; 12], m: Modulus<12>, digest: [Fi
     }
 }
 
+/// A canonical 24-limb value (`< 2^2048`) as 256 big-endian bytes.
+///
+/// Decomposes every limb (range-checking it), requires the 16 bits above
+/// 2048 to be zero, and packs bytes linearly. Cost: 2064 booleanity gates.
+pub fn limbs24_to_bytes256(x: [Field; 24]) -> [Field; 256] {
+    let mut bits = [Field::from(0u8); 2048];
+    let mut i = 0usize;
+    while i < 24usize {
+        let b = x[i].to_bits::<86>();
+        let mut j = 0usize;
+        while j < 86usize {
+            let pos = i * 86usize + j;
+            if pos < 2048usize {
+                bits[pos] = b[j];
+            } else {
+                require_eq(b[j], Field::from(0u8));
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    let mut out = [Field::from(0u8); 256];
+    let mut k = 0usize;
+    while k < 256usize {
+        let base = (255usize - k) * 8usize;
+        let mut byte_bits = [Field::from(0u8); 8];
+        let mut j = 0usize;
+        while j < 8usize {
+            byte_bits[j] = bits[base + j];
+            j += 1;
+        }
+        out[k] = Field::from_bits::<8>(byte_bits);
+        k += 1;
+    }
+    out
+}
+
+/// RSASSA-PKCS1-v1_5 (RFC 8017 §8.2.2) with SHA-256, 2048-bit modulus: the
+/// usual shape of a Document Signer's signature on an EF.SOD.
+///
+/// Requires the encoded message to be exactly
+/// `00 01 FF×202 00 || DigestInfo(SHA-256) || digest`.
+pub fn pkcs1v15_sha256_verify_2048(sig: [Field; 24], m: Modulus<24>, digest: [Field; 32]) {
+    let em = limbs24_to_bytes256(modexp_65537::<24>(sig, m));
+    require_eq(em[0], Field::from(0u8));
+    require_eq(em[1], Field::from(1u8));
+    let mut i = 2usize;
+    while i < 204usize {
+        require_eq(em[i], Field::from(255u8));
+        i += 1;
+    }
+    require_eq(em[204], Field::from(0u8));
+    let di = sha256_digest_info();
+    let mut i = 0usize;
+    while i < 19usize {
+        require_eq(em[205usize + i], di[i]);
+        i += 1;
+    }
+    let mut i = 0usize;
+    while i < 32usize {
+        require_eq(em[224usize + i], digest[i]);
+        i += 1;
+    }
+}
+
+/// DigestInfo for SHA-256 (RFC 8017 §9.2 note 1).
+fn sha256_digest_info() -> [Field; 19] {
+    [
+        Field::from(0x30u8),
+        Field::from(0x31u8),
+        Field::from(0x30u8),
+        Field::from(0x0du8),
+        Field::from(0x06u8),
+        Field::from(0x09u8),
+        Field::from(0x60u8),
+        Field::from(0x86u8),
+        Field::from(0x48u8),
+        Field::from(0x01u8),
+        Field::from(0x65u8),
+        Field::from(0x03u8),
+        Field::from(0x04u8),
+        Field::from(0x02u8),
+        Field::from(0x01u8),
+        Field::from(0x05u8),
+        Field::from(0x00u8),
+        Field::from(0x04u8),
+        Field::from(0x20u8),
+    ]
+}
+
 /// ISO/IEC 9796-2 scheme 1, SHA-1, partial recovery, 1024-bit modulus: the
 /// ICAO passport Active Authentication signature (Doc 9303 part 11 §6.1).
 ///

@@ -4,6 +4,7 @@ members = [
     "crates/circuits/aa",
     "crates/circuits/claim",
     "crates/circuits/dsc-sig",
+    "crates/circuits/rsa2048",
     "crates/circuits/gadgets/poseidon",
     "crates/circuits/gadgets/rsa",
     "crates/circuits/gadgets/sha1",
@@ -104,3 +105,17 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.rsa]
 opt-level = 3
+
+# RSA-2048 needs 24 bignum limbs; upstream caps at 16 until
+# blueshift-gg/xark#36 lands. The fork is 74817fa plus that change, so the
+# installed xark-rustc (built from 74817fa) still matches.
+[patch."https://github.com/blueshift-gg/xark"]
+xark = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-bits = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-bignum = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-prover = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-verifier = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-ir = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-backend = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-macros = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark-sha256 = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
