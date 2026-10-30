@@ -1,0 +1,38 @@
+[package]
+name = "passport-ceremony"
+description = "A multi-party Groth16 setup for the passport circuits: phase 1 from a public powers-of-tau, phase 2 contributions with proofs of knowledge, verification, keys for xark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "passport-ceremony"
+path = "src/main.rs"
+
+[dependencies]
+ark-bn254 = "0.6"
+ark-ec = "0.6"
+ark-ff = "0.6"
+ark-poly = "0.6"
+ark-groth16 = "0.6"
+ark-relations = "0.6"
+ark-serialize = "0.6"
+ark-std = "0.6"
+rayon = "1"
+rand = "0.8"
+rand_chacha = "0.3"
+sha2 = "0.10"
+thiserror = { workspace = true }
+xark-prover = { workspace = true }
+xark-ir = { workspace = true }
+xark-backend = { workspace = true }
+
+[dev-dependencies]
+passport-attest = { workspace = true }
+ark-snark = "0.6"

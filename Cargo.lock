@@ -5270,6 +5270,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "passport-ceremony"
+version = "0.1.0"
+dependencies = [
+ "ark-bn254 0.6.0",
+ "ark-ec 0.6.0",
+ "ark-ff 0.6.0",
+ "ark-groth16",
+ "ark-poly 0.6.0",
+ "ark-relations",
+ "ark-serialize 0.6.0",
+ "ark-snark",
+ "ark-std 0.6.0",
+ "passport-attest",
+ "rand 0.8.8",
+ "rand_chacha 0.3.1",
+ "rayon",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "xark-backend",
+ "xark-ir",
+ "xark-prover",
+]
+
+[[package]]
 name = "passport-core"
 version = "0.1.0"
 dependencies = [

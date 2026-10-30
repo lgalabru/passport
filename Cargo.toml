@@ -13,6 +13,7 @@ members = [
     "crates/circuits/sha1",
     "crates/pki",
     "crates/attest",
+    "crates/ceremony",
     "crates/cli",
     "crates/core",
     "crates/document",

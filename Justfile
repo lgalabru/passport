@@ -98,6 +98,18 @@ enroll-artifacts:
     xark build crates/circuits/enroll
     xark setup crates/circuits/enroll --insecure-dev-mode --deterministic-rng 1 --cache
 
+# The multi-party setup of a circuit (see crates/ceremony): `just ceremony init
+# phase1.ptau crates/circuits/enroll/target/xark/passport_enroll 0000.params`, then
+# `contribute`, `beacon`, `verify`, `export`.
+ceremony +args:
+    cargo run --release -q -p passport-ceremony -- {{args}}
+
+# Prove the fixture passport with the xark CLI, which first runs its
+# under-constraint analysis over the whole circuit.
+enroll-check:
+    cargo run --release -q -p passport-attest --example enroll_inputs > crates/circuits/enroll/target/xark/inputs.txt
+    xark prove crates/circuits/enroll --inputs crates/circuits/enroll/target/xark/inputs.txt
+
 # A real enrollment proof of the fixture passport, proved and verified.
 enroll-proof:
     cargo test --release -p passport-attest --test enroll_proof -- --ignored --nocapture
