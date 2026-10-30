@@ -5222,13 +5222,16 @@ dependencies = [
 name = "passport-attest"
 version = "0.1.0"
 dependencies = [
+ "ark-bn254 0.5.0",
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
+ "ark-ff 0.5.0",
  "ark-ff 0.6.0",
  "ark-groth16",
  "ark-serialize 0.6.0",
  "ark-snark",
  "base64 0.22.1",
+ "light-poseidon 0.4.1",
  "passport-driver-emrtd",
  "rand 0.8.8",
  "serde_json",
