@@ -15,7 +15,7 @@ use std::net::TcpListener;
 use passport_attest::claims::Claim;
 use passport_attest::oid4vp::{decode_component as decode, encode_component};
 use passport_attest::prover::read_verifying_key;
-use passport_attest::token::{Expectations, verify_token};
+use passport_attest::token::{DEV_ISSUER, Expectations, Roots, verify_token};
 use serde_json::{Value, json};
 
 const RESPONSE_URI: &str = "http://localhost:8787/response";
@@ -96,15 +96,15 @@ fn main() {
             let token = vp["passport"][0].as_str().unwrap_or_default();
             let holder = format!("nonce:{nonce}");
             let expect = Expectations {
-                audience: Some(&client_id),
-                holder: Some(&holder),
-                now: Some(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64,
-                ),
-                roots: None,
+                issuer: DEV_ISSUER,
+                audience: &client_id,
+                holder: &holder,
+                now: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64,
+                claims: &claims,
+                roots: Roots::AnyDevelopment,
             };
             match verify_token(token, &vk, &expect) {
                 Ok(verified) => {

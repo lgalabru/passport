@@ -33,9 +33,9 @@ pub struct Request {
     pub audience: String,
     /// The key or nonce the presenter is bound to; becomes `cnf.kid`.
     pub holder: String,
-    /// Issued-at, Unix seconds. Its UTC date is the circuit's `current_date`.
+    /// Issued-at, Unix seconds. Its UTC date is the circuit's `current_date`;
+    /// the time of day is not proven, so verifiers only accept a fresh `iat`.
     pub issued_at: i64,
-    pub lifetime_seconds: i64,
 }
 
 /// The holder's side of enrollment: the secret and what the commitment binds.
@@ -196,7 +196,6 @@ pub fn issue<R: RngCore + CryptoRng>(
         "aud": request.audience,
         "cnf": { "kid": request.holder },
         "iat": request.issued_at,
-        "exp": request.issued_at + request.lifetime_seconds,
         "verified_claims": {
             "verification": {
                 "trust_framework": "icao_9303_zk",
@@ -214,18 +213,41 @@ pub fn issue<R: RngCore + CryptoRng>(
     ))
 }
 
-/// What a relying party checks besides the proof itself.
-#[derive(Debug, Clone, Default)]
+/// How old an `iat` a verifier accepts, in seconds. The proof binds only the
+/// UTC date of `iat`, so a stale `iat` would let a prover pick the day its
+/// predicates are evaluated on (an expired document, a younger age).
+pub const MAX_AGE_SECONDS: i64 = 300;
+/// How far ahead of the verifier's clock an `iat` may be, in seconds.
+pub const CLOCK_SKEW_SECONDS: i64 = 60;
+
+/// The registry roots a verifier accepts.
+#[derive(Debug, Clone, Copy)]
+pub enum Roots<'a> {
+    /// Recent roots of a registry the verifier trusts.
+    Trusted(&'a [Fr]),
+    /// Any root. Only valid with the development issuer, whose tree is built
+    /// by the prover and vouches for nothing.
+    AnyDevelopment,
+}
+
+/// Everything a relying party requires besides a valid proof. None of it is
+/// optional: a verifier that skips one of these checks accepts proofs made
+/// for someone else, on another day, or of something it did not ask.
+#[derive(Debug, Clone, Copy)]
 pub struct Expectations<'a> {
+    /// `iss` must equal this.
+    pub issuer: &'a str,
     /// `aud` must equal this.
-    pub audience: Option<&'a str>,
+    pub audience: &'a str,
     /// `cnf.kid` must equal this (the OpenID4VP nonce, a wallet key…).
-    pub holder: Option<&'a str>,
-    /// Unix seconds; `exp` must be after it and `iat` not too far ahead of it.
-    pub now: Option<i64>,
-    /// Registry roots the verifier trusts. `None` accepts any root, which is
-    /// only meaningful against the development registry.
-    pub roots: Option<&'a [Fr]>,
+    pub holder: &'a str,
+    /// The verifier's clock, Unix seconds. `iat` must be within
+    /// [`MAX_AGE_SECONDS`] before it and [`CLOCK_SKEW_SECONDS`] after it.
+    pub now: i64,
+    /// The claims asked for. The proof must establish exactly these, and every
+    /// one of them must hold.
+    pub claims: &'a [Claim],
+    pub roots: Roots<'a>,
 }
 
 /// A claim proof that verified: its payload, and the statement it proves.
@@ -233,6 +255,11 @@ pub struct Expectations<'a> {
 pub struct Verified {
     pub payload: Value,
     pub statement: Statement,
+}
+
+/// The selector bits of `claims`.
+pub fn selector_of(claims: &[Claim]) -> u16 {
+    claims.iter().fold(0, |s, c| s | (1 << c.bit()))
 }
 
 fn part(parts: &[&str], i: usize) -> Result<Vec<u8>> {
@@ -266,16 +293,7 @@ pub fn verify_token(
     let object = payload
         .as_object()
         .ok_or_else(|| Error::Payload("payload is not an object".into()))?;
-    const KEYS: [&str; 8] = [
-        "iss",
-        "sub",
-        "aud",
-        "cnf",
-        "iat",
-        "exp",
-        "verified_claims",
-        "zk",
-    ];
+    const KEYS: [&str; 7] = ["iss", "sub", "aud", "cnf", "iat", "verified_claims", "zk"];
     if let Some(extra) = object.keys().find(|k| !KEYS.contains(&k.as_str())) {
         return Err(Error::Payload(format!("unexpected payload claim {extra}")));
     }
@@ -289,14 +307,9 @@ pub fn verify_token(
     let iat = payload["iat"]
         .as_i64()
         .ok_or_else(|| Error::Payload("iat is missing".into()))?;
-    let exp = payload["exp"]
-        .as_i64()
-        .ok_or_else(|| Error::Payload("exp is missing".into()))?;
     let root = field_from_b64(&text(&payload["zk"]["root"], "zk.root")?)?;
     let nullifier = field_from_b64(&text(&payload["sub"], "sub")?)?;
-    if payload["iss"] != DEV_ISSUER {
-        return Err(Error::Payload("unknown issuer".into()));
-    }
+    let iss = text(&payload["iss"], "iss")?;
     let verification = &payload["verified_claims"]["verification"];
     if verification
         != &json!({ "trust_framework": "icao_9303_zk", "evidence": [{ "type": "document", "method": "zk_dev" }] })
@@ -305,22 +318,40 @@ pub fn verify_token(
     }
     let statement = parse_rendered(&payload["verified_claims"]["claims"])?;
 
-    if expect.audience.is_some_and(|a| a != aud) {
+    if iss != expect.issuer {
+        return Err(Error::Rejected("proof is from another issuer".into()));
+    }
+    if aud != expect.audience {
         return Err(Error::Rejected("proof is for another audience".into()));
     }
-    if expect.holder.is_some_and(|h| h != holder) {
+    if holder != expect.holder {
         return Err(Error::Rejected("proof is bound to another holder".into()));
     }
-    if let Some(now) = expect.now {
-        if exp <= now {
-            return Err(Error::Rejected("proof has expired".into()));
-        }
-        if iat > now + 300 {
-            return Err(Error::Rejected("proof is from the future".into()));
-        }
+    if iat > expect.now + CLOCK_SKEW_SECONDS {
+        return Err(Error::Rejected("proof is from the future".into()));
     }
-    if expect.roots.is_some_and(|roots| !roots.contains(&root)) {
-        return Err(Error::Rejected("registry root is not trusted".into()));
+    if iat < expect.now - MAX_AGE_SECONDS {
+        return Err(Error::Rejected("proof is too old".into()));
+    }
+    match expect.roots {
+        Roots::Trusted(roots) if !roots.contains(&root) => {
+            return Err(Error::Rejected("registry root is not trusted".into()));
+        }
+        Roots::AnyDevelopment if expect.issuer != DEV_ISSUER => {
+            return Err(Error::Rejected(
+                "any root is only acceptable from the development issuer".into(),
+            ));
+        }
+        _ => {}
+    }
+    let asked = selector_of(expect.claims);
+    if statement.selector != asked {
+        return Err(Error::Rejected(
+            "proof does not establish the claims asked for".into(),
+        ));
+    }
+    if statement.result != asked {
+        return Err(Error::Rejected("a claim asked for does not hold".into()));
     }
 
     let public = public_inputs(

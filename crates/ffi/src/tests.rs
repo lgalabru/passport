@@ -281,10 +281,15 @@ fn request_preview_prove_and_respond() {
         .and_then(|b| passport_attest::prover::read_verifying_key(&b).ok())
         .expect("vk.bin");
     let expect = passport_attest::token::Expectations {
-        audience: Some("redirect_uri:https://bar.example/cb"),
-        holder: Some("nonce:n-0S6_WzA2Mj"),
-        now: Some(now + 1),
-        roots: None,
+        issuer: passport_attest::token::DEV_ISSUER,
+        audience: "redirect_uri:https://bar.example/cb",
+        holder: "nonce:n-0S6_WzA2Mj",
+        now: now + 1,
+        claims: &[
+            passport_attest::claims::Claim::AgeOver(18),
+            passport_attest::claims::Claim::Nationality,
+        ],
+        roots: passport_attest::token::Roots::AnyDevelopment,
     };
     passport_attest::token::verify_token(proved["token"].as_str().unwrap(), &vk, &expect).unwrap();
 
