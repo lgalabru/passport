@@ -343,33 +343,58 @@ returns the payload as JSON, which is what an agent reads. The skill teaches age
 
 ## 6. Distance from here
 
-Done: eMRTD reading on the Flipper (BAC, DG1, DG2), SHA-1, RSA, ISO 9796-2
-and PKCS#1 gadgets, an Active Authentication circuit verified on-chain in an
-in-process surfpool. Since 2026-10-30, also steps 1 and 3 against a stubbed
-enrollment: `crates/circuits/claim` (`passport_claim`, 13.3k constraints before
-minimization) and `crates/attest` (claim parsing, the compact format, issue and
-verify, OpenID4VP), proving on an iPhone through `crates/ffi` in about 0.2 s.
+As of 2026-10-30 the relation of §1 is built end to end, on development
+keys, with its trust anchors explicit. [security.md](./security.md) says what
+each piece proves and what is still trusted.
+
+| Step | State |
+|---|---|
+| 1. Claim circuit | Done: `crates/circuits/claim` (13.5k constraints), proving on an iPhone in about 0.2 s. |
+| 2. SAS verifier program | Not started. |
+| 3. Claim proof format and verification | Done: `crates/attest`. Verifiers must name the issuer, the claims asked for (proven exactly, all true), trusted roots and their clock; `iat` must be fresh. |
+| 4. SOD, DG15, Active Authentication | Done in the reader (`ReadTarget::Sod`, `active_authenticate`) and natively in `crates/pki` (Passive Authentication to trusted CSCAs, ISO 9796-2). |
+| 5. circomlib Poseidon | Done: the gadget and native hash equal `sol_poseidon`. |
+| 6. RSA-2048 | Done: 24-limb bignum on the `lgalabru/xark` fork (`passport` branch); PKCS#1 v1.5 / SHA-256 in 206k constraints. |
+| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 9 s on an M-series Mac. |
+| 8. Registry program | Done: `crates/programs/registry` (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree on `sol_poseidon`, recent roots). The publisher's DSC tree comes from `enroll::dsc_tree`. |
+| 9. Ceremony and audits | The ceremony tool is done (`crates/ceremony`); the ceremony itself and the audits are not. |
 
 Where v1 departs from the text above:
 
-- `current_date` is `YYYYMMDD`, not `YYMMDD`, so the circuit needs no century
-  rule for today. Birth years take the latest century that does not put them
-  after today; expiry years below 70 are in the 2000s.
-- `sanctions_not_in` keeps its selector bit (8) but the circuit rejects it until
-  the sparse Merkle tree exists. `nationalities_in` is not in v1.
-- Hashes are xark's Poseidon (Horizen constants) through
-  `crates/circuits/gadgets/poseidon`, not circomlib's (step 5).
-- `iss` is `dev:local-registry` and `verification.evidence[0].method` is
-  `zk_dev`: the tree is built on the phone and its root vouches for nothing
-  yet. With a one-document tree the root is constant per holder, so proofs to
-  different relying parties are linkable through `zk.root` until the shared
-  registry exists.
+- `current_date` is `YYYYMMDD`, not `YYMMDD`. Birth years take the latest
+  century that does not put them after today; expiry years below 70 are in
+  the 2000s.
+- `sanctions_not_in` keeps its selector bit (8) but the circuit rejects it.
+- The document nullifier is `Poseidon("doc", H(DG15))`: one enrollment per
+  chip key, no salt service. Anyone who has read the chip can recognize it.
+- The AA challenge is the commitment's low 64 bits, so the chip's signature
+  binds the enrollment; the enroll circuit supports RSA-1024 AA keys only.
+- `iss` is `solana:<registry program id>` for enrolled commitments and
+  `dev:local-registry` for a tree built on the phone (evidence method
+  `zk_enrolled` and `zk_dev`).
 - `scope` and `holder` are `Poseidon(len, 31-byte chunks…)` of `aud` and
   `cnf.kid`. Over OpenID4VP, `aud` is the `client_id` and `cnf.kid` is
-  `nonce:<nonce>`.
+  `nonce:<nonce>`; a holder key binding is not in v1.
 
-| Step | Scope | Size |
-|---|---|---|
+What is left:
+
+- **The phone enrolls locally.** The app still builds a one-leaf tree with
+  the development issuer. Enrolling on the phone needs the enroll proving key
+  (about 200 MB, plus the 320 MB minimized R1CS) and about 5 GB while
+  proving, more than an app is allowed by default; and a relayer to submit
+  the transaction. Until then the app's tokens say `zk_dev`, and verifiers
+  must not accept them as passports.
+- **More document profiles**: ECDSA and RSA-PSS Document Signers, RSA-3072
+  and 4096, SHA-1 and SHA-384 LDS hashes, ECDSA Active Authentication, and
+  documents without AA (Chip Authentication cannot be proven to a third
+  party).
+- **The ceremony**, run with outside participants on the Perpetual Powers of
+  Tau (power 21 covers the enroll circuit), then the registry's verifying key
+  replaced, and audits of the circuits and programs.
+- DSC revocation (rebuild the DSC tree and replace the roots), and
+  registry root freshness policy (§8).
+
+---|---|---|
 | 1. Claim circuit | DG1 field extraction, age and date math, list membership, Poseidon commitment and nullifier, Merkle path | Medium |
 | 2. Verifier program issuing SAS attestations via a PDA signer, plus the SAS schema | The on-chain half of §4; SAS itself already exists | Medium |
 | 3. CLI `prove` and `verify`, claim parser to PID names, compact format and key set | Enough for a demo with a **stubbed enrollment** (commitment inserted by cheatcode) | Medium |

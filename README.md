@@ -37,14 +37,17 @@ where other programs can condition on it.
 | --- | --- | --- |
 | 📖 **Read** | ICAO 9303 over NFC: BAC, secure messaging, DG1, DG2, EF.SOD, Active Authentication. One `no_std` reader runs on the iPhone and the Flipper. | Works |
 | 🔏 **Verify** | Passive Authentication (data group hashes, SOD signature, DSC chain to a CSCA) and Active Authentication, natively. | Works: [`crates/pki`](crates/pki) |
-| 🧮 **Claim** | `passport_claim`: age, nationality, issuer, expiry and birth date over the MRZ, plus registry membership. Proves in about 0.2 s on an iPhone. | Works, with dev keys and on-phone enrollment |
+| 🧮 **Claim** | `passport_claim`: age, nationality, issuer, expiry and birth date over the MRZ, plus registry membership. Proves in about 0.2 s on an iPhone. Verifiers pin the issuer, the claims, fresh `iat` and trusted roots. | Works, with dev keys; the app still enrolls locally |
 | 📲 **Present** | The iOS app answers [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html) requests with a compact, JWT-shaped claim proof. | Works |
-| 🪪 **Enroll** | `passport_enroll`: proves the SOD, the DSC chain, the DG15 binding and AA in zero knowledge, so the registry only admits documents a state issued. | In progress: RSA-2048 in xark |
-| ⛓️ **Attest** | A registry program, and a verifier program that issues SAS attestations. | An AA verifier runs in surfpool; the rest is next |
+| 🪪 **Enroll** | `passport_enroll`: proves the SOD, the DSC chain, the DG15 binding and AA in zero knowledge, so the registry only admits documents a state issued. 1.1M constraints, about 9 s on a Mac. | Works, with dev keys |
+| ⛓️ **Attest** | The registry program (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree), and a verifier program that issues SAS attestations. | The registry runs in surfpool; SAS is next |
+| 🕯️ **Setup** | `passport-ceremony`: a multi-party Groth16 setup on the Perpetual Powers of Tau, with verifiable contributions. | The tool works; the ceremony is to run |
 | 🤖 **Agents** | `passport` CLI and MCP server with `prove`, `verify` and `attest`. | `setup` and `scan` today |
 
 The design, and why it splits enrollment (heavy, once per document) from
-claims (light, every time), is in [`docs/design.md`](docs/design.md).
+claims (light, every time), is in [`docs/design.md`](docs/design.md); what
+a verified proof means and what it still rests on is in
+[`docs/security.md`](docs/security.md).
 [`docs/protocol.md`](docs/protocol.md) maps Tempo's passport-signer proposal
 to Solana, and [`docs/primer.md`](docs/primer.md) covers the zero-knowledge
 background.
@@ -136,11 +139,14 @@ passport/
 │   ├── attest/               claim language, compact claim proofs, OpenID4VP
 │   ├── ffi/                  C ABI for the iOS app: reader, specimen chip, attestation flow
 │   ├── circuits/
-│   │   ├── gadgets/          xark gadgets: SHA-1, RSA, PKCS#1 v1.5, ISO 9796-2, Poseidon
+│   │   ├── gadgets/          xark gadgets: SHA-1, RSA, PKCS#1 v1.5, ISO 9796-2, Poseidon, LDS
 │   │   ├── claim/            passport_claim
+│   │   ├── enroll/           passport_enroll
 │   │   └── sha1, dsc-sig, aa, rsa2048/   building blocks of passport_enroll
+│   ├── ceremony/             🕯️ multi-party Groth16 setup (powers of tau, phase 2)
+│   ├── programs/registry/    ⛓️ the registry: enrollment proofs, nullifiers, commitment tree
 │   ├── programs/aa-verifier/ ⛓️ Solana program verifying a passport_aa proof (dev key)
-│   ├── e2e/                  build, deploy and verify on an in-process surfpool
+│   ├── e2e/                  on an in-process surfpool: the AA verifier, enrollment and a claim
 │   ├── integration/          the reader against a simulated chip
 │   ├── types/, core/         config schema; config, setup and scan
 │   └── cli/, mcp/            the passport binary and its MCP server

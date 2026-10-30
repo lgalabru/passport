@@ -145,6 +145,46 @@ fn dsc_modulus(sod: &Sod) -> Result<Vec<u8>> {
     Ok(n.to_bytes_be())
 }
 
+/// The registry publisher's DSC tree: each Document Signer certificate is
+/// checked against the trusted CSCAs and for validity on `today`
+/// (`YYYYMMDD`), and only RSA-2048 signers (what the circuit verifies) are
+/// listed. Returns the tree and, per certificate, its leaf index or why it
+/// was left out.
+pub fn dsc_tree(
+    trust: &passport_pki::Trust,
+    certificates: &[Vec<u8>],
+    today: u32,
+) -> (Tree, Vec<std::result::Result<usize, String>>) {
+    use passport_pki::cert::Certificate;
+    let cscas: Vec<Certificate> = trust
+        .cscas
+        .iter()
+        .filter_map(|c| Certificate::parse(c).ok())
+        .collect();
+    let mut leaves = Vec::new();
+    let outcome = certificates
+        .iter()
+        .map(|der| {
+            let cert = Certificate::parse(der).map_err(|e| e.to_string())?;
+            let csca = cscas
+                .iter()
+                .find(|c| cert.verify_issued_by(c).is_ok())
+                .ok_or("not issued by a trusted CSCA")?;
+            if !cert.valid_on(today) || !csca.valid_on(today) {
+                return Err("not valid on this date".to_string());
+            }
+            let spki = der::parse(cert.spki).map_err(|e| e.to_string())?;
+            let ChipKey::Rsa { n, e } = ChipKey::from_spki(spki).map_err(|e| e.to_string())?;
+            if e != 65537u32.into() || n.bits() != 2048 {
+                return Err("not an RSA-2048 signer".to_string());
+            }
+            leaves.push(dsc_leaf(&n.to_bytes_be()));
+            Ok(leaves.len() - 1)
+        })
+        .collect();
+    (Tree::with_depth(DSC_DEPTH, leaves), outcome)
+}
+
 /// The first step of enrollment: the commitment, its AA challenge, the
 /// document nullifier.
 pub fn prepare(secret: Fr, passport: &Passport) -> Result<Prepared> {
@@ -351,6 +391,33 @@ mod tests {
             limbs(&[1], 3),
             vec![Fr::from(1u8), Fr::from(0u8), Fr::from(0u8)]
         );
+    }
+
+    #[test]
+    fn the_dsc_tree_lists_only_trusted_signers() {
+        use passport_pki::fixtures::TestPki;
+        let ours = TestPki::generate(51, "UT");
+        let theirs = TestPki::generate(52, "UT");
+        let expired = TestPki::generate_with(53, "UT", "200101000000Z", "211231235959Z");
+        let mut trust = ours.trust();
+        trust.cscas.push(expired.csca_cert.clone());
+        let certs = vec![
+            ours.dsc_cert.clone(),
+            theirs.dsc_cert.clone(),
+            expired.dsc_cert.clone(),
+            b"not a certificate".to_vec(),
+        ];
+        let (tree, outcome) = dsc_tree(&trust, &certs, 20261030);
+        assert_eq!(outcome[0], Ok(0));
+        assert_eq!(outcome[1], Err("not issued by a trusted CSCA".into()));
+        assert_eq!(outcome[2], Err("not valid on this date".into()));
+        assert!(outcome[3].is_err());
+        assert_eq!(tree.leaves().len(), 1);
+        let modulus = {
+            let sod = ours.sign_sod(&[(1, b"x")]);
+            dsc_modulus(&Sod::parse(&sod).unwrap()).unwrap()
+        };
+        assert_eq!(tree.leaves()[0], dsc_leaf(&modulus));
     }
 
     #[test]

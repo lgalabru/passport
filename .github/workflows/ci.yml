@@ -36,6 +36,7 @@ jobs:
         run: >
           cargo test --workspace
           --exclude passport_aa --exclude passport_dsc_sig --exclude passport_sha1
+          --exclude passport_rsa2048 --exclude passport_enroll
           --exclude passport-attest --exclude passport-ffi
       # The document vocabulary and the eMRTD driver run on a Flipper Zero.
       - name: no_std builds
@@ -74,10 +75,21 @@ jobs:
         run: |
           xark build crates/circuits/claim
           xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+      # The enrollment circuit is checked through its native validator; its
+      # Groth16 setup needs about 16 GB, so real enrollment proofs run
+      # locally (`just enroll-artifacts enroll-proof e2e`).
+      - name: Build passport_rsa2048 and passport_enroll
+        run: |
+          xark build crates/circuits/rsa2048
+          xark build crates/circuits/enroll
       - name: Circuit tests
-        run: cargo test --release -p passport_sha1 -p passport_dsc_sig -p passport_aa
+        run: >
+          cargo test --release -p passport_sha1 -p passport_dsc_sig -p passport_aa
+          -p passport_rsa2048 -p passport_enroll
       - name: Claim proof tests
         run: cargo test --release -p passport-attest -p passport-ffi
+      - name: The claim circuit through a ceremony
+        run: cargo test --release -p passport-ceremony --test claim_ceremony -- --ignored
       - name: Upload the circuit artifacts
         uses: actions/upload-artifact@v4
         with:
