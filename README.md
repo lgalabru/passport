@@ -1,3 +1,7 @@
+<div align="center">
+  <img alt="Passport" src="assets/docs/passport-globe.png" width="280">
+</div>
+
 # passport
 
 ## Install
