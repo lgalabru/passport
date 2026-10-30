@@ -26,6 +26,18 @@
 use xark::{Field, require_eq};
 use xark_bignum::{mod_mul, mod_neg, range_check_limbs, require_lt};
 
+/// `1` if `x = 0`, else `0`. Unlike the built-in comparison, the inverse
+/// witness is pinned in both cases: `x · w = 1 − out`, `x · out = 0` and
+/// `out · w = 0` leave `w = 1/x` or `w = 0` and nothing else, so no
+/// variable of the circuit is free for the prover to choose.
+fn is_zero(x: Field) -> Field {
+    let w = Field::hint_inverse_or_zero(x);
+    let out = Field::from(1u8) - x * w;
+    require_eq(x * out, Field::from(0u8));
+    require_eq(out * w, Field::from(0u8));
+    out
+}
+
 /// Limb width shared with the curve gadgets: multiply-optimal over BN254.
 pub const LIMB_BITS: usize = 86;
 
@@ -296,7 +308,7 @@ pub fn iso9796_2_s1_sha1_verify_1024(
         low_byte[i] = low[i];
         i += 1;
     }
-    let ends_bc = Field::from((Field::from_bits::<8>(low_byte) - Field::from(0xBCu8)).is_zero());
+    let ends_bc = is_zero(Field::from_bits::<8>(low_byte) - Field::from(0xBCu8));
     let sel = Field::from(1u8) - ends_bc;
     let neg = mod_neg::<12, 86>(t, m.n);
     let mut f = [Field::from(0u8); 12];

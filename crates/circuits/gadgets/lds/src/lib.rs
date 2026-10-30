@@ -18,6 +18,18 @@
 use xark::prelude::*;
 use xark_sha256::{compress, h0};
 
+/// `1` if `x = 0`, else `0`. Unlike the built-in comparison, the inverse
+/// witness is pinned in both cases: `x · w = 1 − out`, `x · out = 0` and
+/// `out · w = 0` leave `w = 1/x` or `w = 0` and nothing else, so no
+/// variable of the circuit is free for the prover to choose.
+pub fn is_zero(x: Field) -> Field {
+    let w = Field::hint_inverse_or_zero(x);
+    let out = Field::from(1u8) - x * w;
+    require_eq(x * out, Field::from(0u8));
+    require_eq(out * w, Field::from(0u8));
+    out
+}
+
 fn one() -> Field {
     Field::from(1u8)
 }
@@ -59,7 +71,7 @@ pub fn sha256_padded<const BLOCKS: usize, const BYTES: usize>(
     let mut picked = zero();
     let mut k = 0usize;
     while k < BLOCKS {
-        sel[k] = Field::from((q - Field::from((k + 1usize) as u64)).is_zero());
+        sel[k] = is_zero(q - Field::from((k + 1usize) as u64));
         picked = picked + sel[k];
         k += 1;
     }
@@ -88,7 +100,7 @@ pub fn sha256_padded<const BLOCKS: usize, const BYTES: usize>(
     let mut after = zero();
     let mut i = 0usize;
     while i < BYTES {
-        let at = Field::from((Field::from(i as u64) - len).is_zero());
+        let at = is_zero(Field::from(i as u64) - len);
         require_eq(at * (m[i] - Field::from(0x80u8)), zero());
         let in_field = if i % 64usize >= 56usize {
             sel[i / 64usize]
@@ -178,7 +190,7 @@ pub fn window<const N: usize, const W: usize>(data: [Field; N], at: Field) -> [F
     let mut found = zero();
     let mut p = 0usize;
     while p + W <= N {
-        let e = Field::from((Field::from(p as u64) - at).is_zero());
+        let e = is_zero(Field::from(p as u64) - at);
         found = found + e;
         let mut j = 0usize;
         while j < W {
@@ -227,6 +239,6 @@ pub fn pack31(bytes: [Field; 32]) -> Field {
 }
 
 pub mod prelude {
-    pub use crate::{bytes, pack31, require_at, sha256_padded, window};
+    pub use crate::{bytes, is_zero, pack31, require_at, sha256_padded, window};
     pub use xark::prelude::*;
 }
