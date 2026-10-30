@@ -52,6 +52,8 @@ flipper-install port="": flipper-build
 # so this is only needed to inspect constraint counts or produce proving keys.
 circuits-build:
     xark build crates/circuits/sha1
+    xark build crates/circuits/rsa2048
+    xark build crates/circuits/enroll
     xark build crates/circuits/claim
     xark build crates/circuits/dsc-sig
     xark build crates/circuits/aa
@@ -89,6 +91,16 @@ ci: fmt lint test check-no-std
 claim-artifacts:
     xark build crates/circuits/claim
     xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+
+# Build the passport_enroll circuit and its dev-mode keys (NOT for production;
+# setup peaks at about 16 GB of memory).
+enroll-artifacts:
+    xark build crates/circuits/enroll
+    xark setup crates/circuits/enroll --insecure-dev-mode --deterministic-rng 1 --cache
+
+# A real enrollment proof of the fixture passport, proved and verified.
+enroll-proof:
+    cargo test --release -p passport-attest --test enroll_proof -- --ignored --nocapture
 
 # A local OpenID4VP relying party: prints a request link, verifies the proof it gets back.
 # `just relying-party 'age.gte(18)' nationality`, then open the link on the simulator.
