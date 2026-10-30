@@ -164,10 +164,8 @@ pub fn mac_algorithm3(key: &Key16, data: &[u8], prepadded: bool) -> Result<Block
     let k2: &Key8 = k2.try_into().unwrap();
 
     let mut y = [0u8; 8];
-    for block in data.chunks_exact(8) {
-        let mut b = [0u8; 8];
-        b.copy_from_slice(block);
-        y = des_cbc_encrypt_block(k1, &y, &b);
+    for block in data.as_chunks::<8>().0 {
+        y = des_cbc_encrypt_block(k1, &y, block);
     }
 
     if !prepadded {
