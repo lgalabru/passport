@@ -1,0 +1,24 @@
+[package]
+name = "passport-ffi"
+description = "C ABI over the eMRTD reader, for the iOS app (CoreNFC transport lives in Swift)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+# `staticlib` is what Xcode links; `lib` keeps `cargo test` working on the host.
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+passport-driver-emrtd = { workspace = true, features = ["std"] }
+passport-attest = { workspace = true }
+rand = "0.8"
+ark-ff = "0.6"
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

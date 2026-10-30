@@ -211,6 +211,12 @@ Compare how each system derives a per-person identifier:
 The TIP's salt is what stops an issuing state from enumerating its own
 citizens' addresses. Where the salt lives is an open question in the TIP.
 
+If you know OpenID Connect, a scoped nullifier is its *pairwise subject
+identifier*: `hash(sector, local_id, salt)` gives each relying party a
+different stable pseudonym for the same person. Our `Poseidon(secret, scope)`
+is the same idea, which is why the claim proof carries it as `sub`
+(see design.md §3).
+
 ---
 
 ## 5. Under-constrained circuits, the bug class to fear

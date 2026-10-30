@@ -1,0 +1,23 @@
+[package]
+name = "passport_sha1"
+description = "Circuit: SHA-1 known-answer check (two blocks); exercises the SHA-1 gadget"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xark = { workspace = true }
+passport-gadget-sha1 = { workspace = true }
+
+# Host-only: the native validator the `#[circuit]` macro generates for tests.
+[target.'cfg(not(xark))'.dependencies]
+xark-prover = { workspace = true }
+
+[dev-dependencies]
+sha1 = "0.10"

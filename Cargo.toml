@@ -1,13 +1,24 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
+    "crates/circuits/aa",
+    "crates/circuits/claim",
+    "crates/circuits/dsc-sig",
+    "crates/circuits/gadgets/poseidon",
+    "crates/circuits/gadgets/rsa",
+    "crates/circuits/gadgets/sha1",
+    "crates/circuits/sha1",
+    "crates/attest",
     "crates/cli",
     "crates/core",
     "crates/document",
+    "crates/e2e",
     "crates/drivers/*",
+    "crates/ffi",
     "crates/flipper",
     "crates/integration",
     "crates/mcp",
+    "crates/programs/aa-verifier",
     "crates/types",
 ]
 default-members = ["crates/cli"]
@@ -25,7 +36,20 @@ passport-types = { version = "0.1.0", path = "crates/types" }
 passport-core = { version = "0.1.0", path = "crates/core" }
 passport-mcp = { version = "0.1.0", path = "crates/mcp" }
 passport-document = { version = "0.1.0", path = "crates/document", default-features = false }
+passport-attest = { version = "0.1.0", path = "crates/attest" }
 passport-driver-emrtd = { version = "0.1.0", path = "crates/drivers/emrtd", default-features = false }
+passport-gadget-sha1 = { version = "0.1.0", path = "crates/circuits/gadgets/sha1" }
+passport-gadget-poseidon = { version = "0.1.0", path = "crates/circuits/gadgets/poseidon" }
+passport-gadget-rsa = { version = "0.1.0", path = "crates/circuits/gadgets/rsa" }
+# xark: Rust circuits -> Groth16 (BN254) -> Solana verifier. Pinned to the commit the
+# installed `xark` / `xark-rustc` binaries were built from (see README, Circuits).
+xark = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa", default-features = false }
+xark-bits = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-bignum = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-prover = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-verifier = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-ir = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-backend = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -53,6 +77,10 @@ flipperzero-alloc = "0.16"
 
 [workspace.lints.clippy]
 all = "warn"
+
+[workspace.lints.rust]
+# `cfg(xark)` is set by the xark compiler when it lowers a circuit crate.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(xark)', 'cfg(target_os, values("solana"))'] }
 
 # Flipper Zero: STM32WB55, 256 KB RAM, 2 KB app stack. Optimise for size and
 # never unwind into the firmware. A separate profile so the CLI's `release`

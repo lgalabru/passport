@@ -62,7 +62,7 @@ pub struct PollerContext {
 
 /// How many times one card is tried before the failure is reported. A hand
 /// holding a passport against the back of a Flipper drifts.
-const MAX_ATTEMPTS: u8 = 4;
+const MAX_ATTEMPTS: u8 = 2;
 
 /// Scanner callback context.
 #[derive(Debug)]

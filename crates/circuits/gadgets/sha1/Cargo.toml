@@ -1,0 +1,16 @@
+[package]
+name = "passport-gadget-sha1"
+description = "SHA-1 gadget for xark circuits (ICAO passports still sign with it)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xark = { workspace = true }
+xark-bits = { workspace = true }

@@ -1,0 +1,4 @@
+module PassportFFI {
+    header "passport_ffi.h"
+    export *
+}

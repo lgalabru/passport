@@ -1,0 +1,29 @@
+[package]
+name = "passport-attest"
+description = "Passport claim proofs: claim vocabulary, Groth16 proving over passport_claim, the compact claim-proof format, OpenID4VP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+passport-driver-emrtd = { workspace = true, features = ["std"] }
+xark-prover = { workspace = true }
+xark-ir = { workspace = true }
+xark-backend = { workspace = true }
+ark-bn254 = "0.6"
+ark-ff = "0.6"
+ark-ec = "0.6"
+ark-groth16 = "0.6"
+ark-serialize = "0.6"
+ark-snark = "0.6"
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

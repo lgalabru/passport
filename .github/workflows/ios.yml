@@ -1,0 +1,54 @@
+name: iOS
+
+# Manual for now: the app needs the iOS 27.1 SDK (UIHingeInteraction,
+# reserved regions), so it runs only on a macOS image whose Xcode has it.
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: macOS runner image with Xcode 27.1 or later
+        default: macos-latest
+      xcode:
+        description: Xcode version to select (empty for the image default)
+        default: ""
+
+jobs:
+  build:
+    name: Build for the simulator
+    runs-on: ${{ inputs.runner }}
+    env:
+      XARK_REV: 74817fa
+      XARK_NIGHTLY: nightly-2026-05-03
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        if: inputs.xcode != ''
+        run: sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode }}.app"
+      - name: Check the SDK
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E 'iphonesimulator(27\.[1-9]|2[89]|[3-9][0-9])' \
+            || { echo "::error::this Xcode has no iOS 27.1+ simulator SDK"; exit 1; }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.XARK_NIGHTLY }}
+          components: rust-src, rustc-dev, llvm-tools
+      - uses: Swatinem/rust-cache@v2
+      - name: Install xark
+        run: |
+          cargo +${{ env.XARK_NIGHTLY }} install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-rustc
+          cargo install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-cli
+      - name: Build passport_claim and its dev keys
+        run: |
+          xark build crates/circuits/claim
+          xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+      - name: Build the app
+        run: >
+          xcodebuild -project ios/Passport.xcodeproj -scheme Passport
+          -sdk iphonesimulator -configuration Debug
+          -derivedDataPath ios/build/DerivedData
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build

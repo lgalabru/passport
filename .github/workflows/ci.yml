@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # The pinned xark toolchain; keep in step with the xark rev in Cargo.toml.
+  XARK_REV: 74817fa
+  XARK_NIGHTLY: nightly-2026-05-03
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, tests, no_std)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      # Crates whose tests build circuits need the xark compiler and the
+      # passport_claim artifacts; they run in the `circuits` job.
+      - name: Tests
+        run: >
+          cargo test --workspace
+          --exclude passport_aa --exclude passport_dsc_sig --exclude passport_sha1
+          --exclude passport-attest --exclude passport-ffi
+      # The document vocabulary and the eMRTD driver run on a Flipper Zero.
+      - name: no_std builds
+        run: |
+          cargo build -p passport-document --no-default-features
+          cargo build -p passport-driver-emrtd --no-default-features
+          cargo clippy -p passport-driver-emrtd --no-default-features --lib -- -D warnings
+          cargo build -p passport-driver-emrtd --no-default-features --target thumbv7em-none-eabihf --release
+          cargo clippy -p passport-flipper --target thumbv7em-none-eabihf --lib --bins -- -D warnings
+
+  circuits:
+    name: Circuits and claim proofs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.XARK_NIGHTLY }}
+          components: rust-src, rustc-dev, llvm-tools
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache the xark binaries
+        id: xark-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/xark
+            ~/.cargo/bin/xark-rustc
+          key: xark-${{ env.XARK_REV }}-${{ env.XARK_NIGHTLY }}-${{ runner.os }}
+      - name: Install xark
+        if: steps.xark-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo +${{ env.XARK_NIGHTLY }} install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-rustc
+          cargo install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-cli
+      - name: Build passport_claim and its dev keys
+        run: |
+          xark build crates/circuits/claim
+          xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+      - name: Circuit tests
+        run: cargo test --release -p passport_sha1 -p passport_dsc_sig -p passport_aa
+      - name: Claim proof tests
+        run: cargo test --release -p passport-attest -p passport-ffi
+      - name: Upload the circuit artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: passport-claim-artifacts
+          path: |
+            crates/circuits/claim/target/xark/passport_claim/circuit.xbc
+            crates/circuits/claim/target/xark/passport_claim/r1cs.min.wcz
+            crates/circuits/claim/target/xark/passport_claim/pk.bin
+            crates/circuits/claim/target/xark/passport_claim/vk.bin
+          retention-days: 7
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --redact --no-banner --exit-code 1

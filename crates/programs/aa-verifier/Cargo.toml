@@ -1,0 +1,21 @@
+[package]
+name = "passport-aa-verifier"
+description = "Solana program: verifies a Groth16 proof of the passport_aa circuit (ICAO Active Authentication) with the verifying key baked in"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# Zero-copy entrypoint, no_std, no external deps. Re-exports the same
+# `solana-program-error` major xark-verifier converts its errors into.
+pinocchio = "0.11.2"
+xark-verifier = { workspace = true }
