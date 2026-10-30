@@ -30,12 +30,24 @@ pub enum Fault {
     Status { at: usize, sw: u16 },
 }
 
+/// The chip's answer to INTERNAL AUTHENTICATE, given the challenge.
+pub type Sign = dyn Fn(&[u8; 8]) -> Vec<u8>;
+
+pub struct Signer(pub Box<Sign>);
+
+impl std::fmt::Debug for Signer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Signer")
+    }
+}
+
 #[derive(Debug)]
 pub struct ChipBuilder {
     key: MrzKey,
     files: Vec<(u16, Vec<u8>)>,
     faults: Vec<Fault>,
     protocol: TransportProtocol,
+    signer: Option<Signer>,
 }
 
 impl ChipBuilder {
@@ -46,7 +58,14 @@ impl ChipBuilder {
             files: Vec::new(),
             faults: Vec::new(),
             protocol: TransportProtocol::Iso14443_4a,
+            signer: None,
         }
+    }
+
+    /// Answer INTERNAL AUTHENTICATE (Active Authentication) with `sign`.
+    pub fn active_authentication(mut self, sign: impl Fn(&[u8; 8]) -> Vec<u8> + 'static) -> Self {
+        self.signer = Some(Signer(Box::new(sign)));
+        self
     }
 
     pub fn file(mut self, id: u16, contents: Vec<u8>) -> Self {
@@ -79,6 +98,7 @@ impl ChipBuilder {
             selected: None,
             faults: self.faults,
             protocol: self.protocol,
+            signer: self.signer,
             log: Vec::new(),
         }
     }
@@ -96,6 +116,7 @@ pub struct Chip {
     selected: Option<usize>,
     faults: Vec<Fault>,
     protocol: TransportProtocol,
+    signer: Option<Signer>,
     /// Every raw command received, in order.
     pub log: Vec<Vec<u8>>,
 }
@@ -157,7 +178,7 @@ impl Chip {
                 0x87 => do87 = Some((&body[offset..end], value)),
                 0x97 => do97 = Some((&body[offset..end], value)),
                 0x8E => mac = Some(value),
-                other => panic!("unexpected data object {other:#x}"),
+                other => panic!("unexpected data object {other:#x} in {tx:02x?}"),
             }
             offset = end;
         }
@@ -199,6 +220,17 @@ impl Chip {
                 let end = (offset + le).min(file.len());
                 (0x9000, file.get(offset..end).unwrap_or_default().to_vec())
             }
+            0x88 => match &self.signer {
+                Some(Signer(sign)) => {
+                    let challenge: [u8; 8] = data
+                        .expect("INTERNAL AUTHENTICATE carries the challenge")
+                        .try_into()
+                        .expect("an 8-byte challenge");
+                    (0x9000, sign(&challenge))
+                }
+                // No Active Authentication: instruction not supported.
+                None => (0x6D00, Vec::new()),
+            },
             ins => panic!("unexpected INS {ins:#x}"),
         };
 
@@ -207,7 +239,12 @@ impl Chip {
         if !out.is_empty() {
             let mut encrypted = do_pad(&out, 8);
             tdes_cbc_encrypt(&self.ks_enc, &[0; 8], &mut encrypted).unwrap();
-            response.extend_from_slice(&[0x87, encrypted.len() as u8 + 1, 0x01]);
+            let len = encrypted.len() + 1;
+            if len < 0x80 {
+                response.extend_from_slice(&[0x87, len as u8, 0x01]);
+            } else {
+                response.extend_from_slice(&[0x87, 0x81, len as u8, 0x01]);
+            }
             response.extend_from_slice(&encrypted);
         }
         response.extend_from_slice(&[0x99, 0x02]);
@@ -243,6 +280,12 @@ impl Transport for Chip {
             _ => {}
         }
 
+        // A plain command during secure messaging ends the session, as on a
+        // real chip; the reader starts every read with a plain SELECT.
+        if self.authed && tx[0] & 0x0C == 0 {
+            self.authed = false;
+            self.selected = None;
+        }
         let mut response = if self.authed {
             self.protected(tx)
         } else {

@@ -99,21 +99,35 @@ pub fn outcome(result: Result<ReadOutcome, ReaderError>, exchanges: usize) -> Va
                 "format": file.format.extension(),
             }
         }),
-        Err(error) => {
-            let status_word = match &error {
-                ReaderError::StatusWord(sw) => Some(format!("{:04X}", sw.0)),
-                _ => None,
-            };
-            json!({
-                "ok": false,
-                "error": error.to_string(),
-                "hint": hint(&error),
-                "retryable": error.is_transient(),
-                "status_word": status_word,
-                "exchanges": exchanges,
-            })
-        }
+        Err(error) => reader_failure(&error, exchanges),
     }
+}
+
+/// An Active Authentication answer: `{"ok":true,"signature":"…hex…"}`.
+pub fn authentication(result: Result<Vec<u8>, ReaderError>, exchanges: usize) -> Value {
+    match result {
+        Ok(signature) => json!({
+            "ok": true,
+            "exchanges": exchanges,
+            "signature": hex(&signature),
+        }),
+        Err(error) => reader_failure(&error, exchanges),
+    }
+}
+
+fn reader_failure(error: &ReaderError, exchanges: usize) -> Value {
+    let status_word = match error {
+        ReaderError::StatusWord(sw) => Some(format!("{:04X}", sw.0)),
+        _ => None,
+    };
+    json!({
+        "ok": false,
+        "error": error.to_string(),
+        "hint": hint(error),
+        "retryable": error.is_transient(),
+        "status_word": status_word,
+        "exchanges": exchanges,
+    })
 }
 
 fn com(com: &Com) -> Value {

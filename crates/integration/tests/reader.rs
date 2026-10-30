@@ -392,3 +392,95 @@ fn sink_failure_is_reported_and_sink_closed() {
     assert_eq!(result, Err(StorageError::Io.into()));
     assert!(sink.closed);
 }
+
+// --- Passive and Active Authentication ------------------------------------------
+
+mod authentication {
+    use super::*;
+    use passport_pki::fixtures::{TestChip, TestPki};
+    use passport_pki::{passive_authentication, verify_active_authentication};
+    use std::rc::Rc;
+
+    const SOD: ReadTarget = ReadTarget::Sod;
+    const DG15: ReadTarget = ReadTarget::Dg(DataGroup::Dg15);
+
+    fn saved(chip: &mut dyn Transport, target: ReadTarget) -> Vec<u8> {
+        let mut sink = VecSink::default();
+        let (result, _) = read(chip, &mut sink, target);
+        assert!(matches!(result, Ok(ReadOutcome::Saved(_))), "{result:?}");
+        sink.data
+    }
+
+    #[test]
+    fn a_read_document_passes_passive_and_active_authentication() {
+        let pki = TestPki::generate(11, "UT");
+        let card = Rc::new(TestChip::generate(11));
+        let dg15 = card.dg15();
+        let sod = pki.sign_sod(&[(1, &dg1_file()), (15, &dg15)]);
+        let signer = Rc::clone(&card);
+        let mut chip = ChipBuilder::new(&icao_key())
+            .file(0x0101, dg1_file())
+            .file(0x010F, dg15.clone())
+            .file(0x011D, sod.clone())
+            .active_authentication(move |c| signer.internal_authenticate(c))
+            .build();
+
+        let read_sod = saved(&mut chip, SOD);
+        assert_eq!(read_sod, sod, "EF.SOD comes back byte for byte");
+        let read_dg15 = saved(&mut chip, DG15);
+        assert_eq!(read_dg15, dg15);
+        let (dg1, _) = read(&mut chip, &mut VecSink::default(), DG1);
+        let Ok(ReadOutcome::Dg1 { raw: dg1, .. }) = dg1 else {
+            panic!("{dg1:?}")
+        };
+        passive_authentication(
+            &read_sod,
+            &[(1, &dg1), (15, &read_dg15)],
+            &pki.trust(),
+            20261030,
+        )
+        .unwrap();
+
+        let challenge = [9, 8, 7, 6, 5, 4, 3, 2];
+        let mut events = Events::default();
+        let mut sink = VecSink::default();
+        let signature = Reader::new(&mut chip, &mut events, &mut sink, icao_key())
+            .active_authenticate(&challenge)
+            .unwrap();
+        verify_active_authentication(&read_dg15, &challenge, &signature).unwrap();
+        assert_eq!(events.0.last(), Some(&ReaderEvent::Finished));
+        // Under secure messaging: the challenge is not on the wire in clear.
+        let last = chip.log.last().unwrap();
+        assert_eq!(last[1], 0x88);
+        assert!(!last.windows(8).any(|w| w == challenge));
+    }
+
+    #[test]
+    fn a_chip_without_active_authentication_says_so() {
+        let mut chip = ChipBuilder::new(&icao_key()).build();
+        let mut events = Events::default();
+        let result = Reader::new(&mut chip, &mut events, &mut VecSink::default(), icao_key())
+            .active_authenticate(&[0; 8]);
+        assert_eq!(
+            result,
+            Err(ReaderError::StatusWord(StatusWord::from_bytes([
+                0x6D, 0x00
+            ])))
+        );
+        assert!(matches!(events.0.last(), Some(ReaderEvent::Failed(_))));
+    }
+
+    #[test]
+    fn active_authentication_needs_the_right_key() {
+        let card = TestChip::generate(12);
+        let mut chip = ChipBuilder::new(&icao_key())
+            .active_authentication(move |c| card.internal_authenticate(c))
+            .build();
+        let wrong =
+            passport_driver_emrtd::types::MrzKey::new("X0000000", "690806", "940623").unwrap();
+        let mut events = Events::default();
+        let result = Reader::new(&mut chip, &mut events, &mut VecSink::default(), wrong)
+            .active_authenticate(&[0; 8]);
+        assert!(result.is_err(), "BAC fails first");
+    }
+}

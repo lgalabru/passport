@@ -118,7 +118,27 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn run(&mut self, target: ReadTarget) -> Result<ReadOutcome, ReaderError> {
+    /// Active Authentication: BAC, then INTERNAL AUTHENTICATE with
+    /// `challenge`. Returns the chip's signature, which only the chip's
+    /// private key (behind DG15) can produce; check it with the DG15 key.
+    pub fn active_authenticate(&mut self, challenge: &[u8; 8]) -> Result<Vec<u8>, ReaderError> {
+        self.secure = false;
+        let result = self.establish().and_then(|()| {
+            let answer = self.send(&commands::internal_authenticate(challenge))?;
+            if answer.data.is_empty() {
+                return Err(ReaderError::ShortResponse);
+            }
+            Ok(answer.data)
+        });
+        match &result {
+            Ok(_) => self.observer.event(ReaderEvent::Finished),
+            Err(error) => self.observer.event(ReaderEvent::Failed(error.clone())),
+        }
+        result
+    }
+
+    /// SELECT the application and run BAC; secure messaging is on after.
+    fn establish(&mut self) -> Result<(), ReaderError> {
         self.observer
             .event(ReaderEvent::Detected(self.transport.protocol()));
 
@@ -136,7 +156,11 @@ impl<'a> Reader<'a> {
             format_args!("Mutual authentication success"),
         );
         self.observer.event(ReaderEvent::Authenticated);
+        Ok(())
+    }
 
+    fn run(&mut self, target: ReadTarget) -> Result<ReadOutcome, ReaderError> {
+        self.establish()?;
         self.send(&commands::select_file(target.file_id()))?;
 
         match target {
@@ -152,7 +176,7 @@ impl<'a> Reader<'a> {
                 Ok(ReadOutcome::Dg1 { raw, record })
             }
             ReadTarget::Dg(group) if group.is_image() => self.save_image(target),
-            ReadTarget::Dg(_) => self.save_generic(target),
+            ReadTarget::Dg(_) | ReadTarget::Sod => self.save_generic(target),
         }
     }
 

@@ -118,12 +118,14 @@ pub(crate) unsafe fn text<'a>(ptr: *const c_char) -> &'a str {
     unsafe { CStr::from_ptr(ptr) }.to_str().unwrap_or("")
 }
 
-/// `0` is `EF.COM`, `1..=15` a data group.
+/// `0` is `EF.COM`, `1..=15` a data group, `0x1D` `EF.SOD` (its file id's low byte).
+pub const TARGET_SOD: u8 = 0x1D;
+
 fn target_from_code(code: u8) -> Option<ReadTarget> {
-    if code == 0 {
-        Some(ReadTarget::Com)
-    } else {
-        DataGroup::from_number(code).map(ReadTarget::Dg)
+    match code {
+        0 => Some(ReadTarget::Com),
+        TARGET_SOD => Some(ReadTarget::Sod),
+        n => DataGroup::from_number(n).map(ReadTarget::Dg),
     }
 }
 
@@ -259,6 +261,114 @@ fn run(host: &PassportHost, transport: impl Transport, key: MrzKey, target: Read
     observer.event(ReaderEvent::Scanning);
     let result = Reader::new(&mut transport, &mut observer, &mut sink, key).read(target);
     json::outcome(result, exchanges.get())
+}
+
+/// Active Authentication over `transport` with `challenge`.
+fn run_authenticate(
+    host: &PassportHost,
+    transport: impl Transport,
+    key: MrzKey,
+    challenge: &[u8; 8],
+) -> Value {
+    let exchanges = Cell::new(0);
+    let mut transport = Counted {
+        inner: transport,
+        exchanges: &exchanges,
+    };
+    let mut observer = Bridge {
+        host,
+        exchanges: &exchanges,
+    };
+    let mut sink = HostSink { host };
+    observer.event(ReaderEvent::Scanning);
+    let result =
+        Reader::new(&mut transport, &mut observer, &mut sink, key).active_authenticate(challenge);
+    json::authentication(result, exchanges.get())
+}
+
+/// The 8-byte challenge from 16 hex digits.
+fn challenge(hex: &str) -> Result<[u8; 8], Value> {
+    let bytes: Option<Vec<u8>> = (0..hex.len())
+        .step_by(2)
+        .map(|i| {
+            hex.get(i..i + 2)
+                .and_then(|b| u8::from_str_radix(b, 16).ok())
+        })
+        .collect();
+    bytes
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| json::failure("the challenge must be 8 bytes of hex", false))
+}
+
+/// Active Authentication with the card behind `host`: BAC, then INTERNAL
+/// AUTHENTICATE with `challenge_hex` (16 hex digits). Returns
+/// `{"ok":true,"signature":"…"}`; check it against DG15.
+///
+/// # Safety
+/// As [`passport_read`]; `challenge_hex` is null or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn passport_active_authenticate(
+    host: *const PassportHost,
+    document_number: *const c_char,
+    date_of_birth: *const c_char,
+    date_of_expiry: *const c_char,
+    challenge_hex: *const c_char,
+) -> *mut c_char {
+    // SAFETY: guaranteed by the caller.
+    let Some(host) = (unsafe { host.as_ref() }) else {
+        return give(json::failure("no host", false));
+    };
+    // SAFETY: guaranteed by the caller.
+    let (doc, dob, doe, ch) = unsafe {
+        (
+            text(document_number),
+            text(date_of_birth),
+            text(date_of_expiry),
+            text(challenge_hex),
+        )
+    };
+    give(
+        match key_or_error(doc, dob, doe).and_then(|k| Ok((k, challenge(ch)?))) {
+            Ok((key, challenge)) => run_authenticate(host, Radio { host }, key, &challenge),
+            Err(error) => error,
+        },
+    )
+}
+
+/// [`passport_active_authenticate`] against the demo chip.
+///
+/// # Safety
+/// As [`passport_active_authenticate`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn passport_demo_active_authenticate(
+    host: *const PassportHost,
+    document_number: *const c_char,
+    date_of_birth: *const c_char,
+    date_of_expiry: *const c_char,
+    challenge_hex: *const c_char,
+    delay_ms: u32,
+) -> *mut c_char {
+    // SAFETY: guaranteed by the caller.
+    let Some(host) = (unsafe { host.as_ref() }) else {
+        return give(json::failure("no host", false));
+    };
+    // SAFETY: guaranteed by the caller.
+    let (doc, dob, doe, ch) = unsafe {
+        (
+            text(document_number),
+            text(date_of_birth),
+            text(date_of_expiry),
+            text(challenge_hex),
+        )
+    };
+    give(
+        match key_or_error(doc, dob, doe).and_then(|k| Ok((k, challenge(ch)?))) {
+            Ok((key, challenge)) => {
+                run_authenticate(host, demo::Chip::specimen(delay_ms), key, &challenge)
+            }
+            Err(error) => error,
+        },
+    )
 }
 
 fn key_or_error(doc: &str, dob: &str, doe: &str) -> Result<MrzKey, Value> {

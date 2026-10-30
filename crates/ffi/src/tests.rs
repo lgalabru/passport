@@ -143,8 +143,71 @@ fn demo_com_lists_the_data_groups() {
     assert_eq!(result["ok"], true, "{result}");
     assert_eq!(
         result["outcome"]["com"]["data_groups"],
-        serde_json::json!([1, 2, 11, 14])
+        serde_json::json!([1, 2, 11, 14, 15])
     );
+}
+
+/// The demo chip's file `target`, as streamed to the sink.
+fn demo_file(target: u8) -> Vec<u8> {
+    let mut recorder = Recorder::default();
+    let result = demo(&mut recorder, demo::SPECIMEN_KEY, target);
+    assert_eq!(result["ok"], true, "{result}");
+    recorder.file.unwrap().1
+}
+
+#[test]
+fn the_specimen_passes_passive_authentication() {
+    let sod = demo_file(crate::TARGET_SOD);
+    let dg15 = demo_file(15);
+    assert_eq!(sod[0], 0x77);
+    passport_pki::passive_authentication(
+        &sod,
+        &[(1, &demo_dg1()), (15, &dg15)],
+        &demo::specimen().pki.trust(),
+        20261030,
+    )
+    .unwrap();
+}
+
+fn demo_authenticate(key: (&str, &str, &str), challenge: &str) -> Value {
+    let mut recorder = Recorder::default();
+    let host = host(&mut recorder);
+    let (doc, dob, doe, ch) = (
+        CString::new(key.0).unwrap(),
+        CString::new(key.1).unwrap(),
+        CString::new(key.2).unwrap(),
+        CString::new(challenge).unwrap(),
+    );
+    take(unsafe {
+        passport_demo_active_authenticate(
+            &host,
+            doc.as_ptr(),
+            dob.as_ptr(),
+            doe.as_ptr(),
+            ch.as_ptr(),
+            0,
+        )
+    })
+}
+
+#[test]
+fn the_specimen_answers_active_authentication() {
+    let result = demo_authenticate(demo::SPECIMEN_KEY, "0102030405060708");
+    assert_eq!(result["ok"], true, "{result}");
+    let sig: Vec<u8> = (0..256)
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&result["signature"].as_str().unwrap()[i..i + 2], 16).unwrap())
+        .collect();
+    let dg15 = demo_file(15);
+    passport_pki::verify_active_authentication(&dg15, &[1, 2, 3, 4, 5, 6, 7, 8], &sig).unwrap();
+    assert!(passport_pki::verify_active_authentication(&dg15, &[0; 8], &sig).is_err());
+
+    for bad in ["01020304", "zz02030405060708", ""] {
+        let result = demo_authenticate(demo::SPECIMEN_KEY, bad);
+        assert_eq!(result["ok"], false, "{bad}");
+    }
+    let wrong = demo_authenticate(("L898902C3", "740813", "120415"), "0102030405060708");
+    assert_eq!(wrong["ok"], false);
 }
 
 #[test]

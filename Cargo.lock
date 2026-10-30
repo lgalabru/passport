@@ -5319,6 +5319,7 @@ dependencies = [
  "ark-ff 0.6.0",
  "passport-attest",
  "passport-driver-emrtd",
+ "passport-pki",
  "rand 0.8.8",
  "serde_json",
 ]
@@ -5363,6 +5364,7 @@ name = "passport-integration"
 version = "0.1.0"
 dependencies = [
  "passport-driver-emrtd",
+ "passport-pki",
  "proptest",
 ]
 
