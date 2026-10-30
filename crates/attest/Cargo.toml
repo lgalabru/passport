@@ -27,3 +27,10 @@ thiserror = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The reference Poseidon (circomlib parameters, Solana's `sol_poseidon`); on
+# its own arkworks version, compared through decimal strings.
+light-poseidon = "0.4"
+ark-bn254-05 = { package = "ark-bn254", version = "0.5" }
+ark-ff-05 = { package = "ark-ff", version = "0.5" }

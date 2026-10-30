@@ -6,9 +6,9 @@
 # The app plays the taps itself (`-demo`, debug builds); folding and unfolding
 # are yours, in DeviceHub. Start with the Duo folded.
 #
-#   ios/scripts/record-demo.sh        # or: just demo-video
+#   clients/ios/scripts/record-demo.sh        # or: just demo-video
 #
-# Output: ios/build/demo/passport-duo.mp4, a recording of the DeviceHub window,
+# Output: clients/ios/build/demo/passport-duo.mp4, a recording of the DeviceHub window,
 # device frame and folds included. Keep that window on this desktop, in front,
 # and don't move it while recording.
 # Recording a window needs Screen Recording permission for this terminal.
@@ -18,9 +18,9 @@
 #   AUTO=1           no Enter presses: the script waits for your folds instead
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT="$ROOT/ios/build/demo"
-APP="$ROOT/ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Passport.app"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+OUT="$ROOT/clients/ios/build/demo"
+APP="$ROOT/clients/ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Passport.app"
 
 UDID=$(xcrun simctl list devices booted -j | python3 -c '
 import json, sys
@@ -33,8 +33,8 @@ raise SystemExit("Boot the iPhone Duo simulator first (open it in DeviceHub).")
 
 rm -rf "$OUT" && mkdir -p "$OUT"
 echo "Building…"
-xcodebuild -quiet -project "$ROOT/ios/Passport.xcodeproj" -scheme Passport -configuration Debug \
-    -derivedDataPath "$ROOT/ios/build/DerivedData" -destination "id=$UDID" build
+xcodebuild -quiet -project "$ROOT/clients/ios/Passport.xcodeproj" -scheme Passport -configuration Debug \
+    -derivedDataPath "$ROOT/clients/ios/build/DerivedData" -destination "id=$UDID" build
 cargo build -q --release --manifest-path "$ROOT/Cargo.toml" -p passport-attest --example relying_party
 
 # A simulated enrolled finger, so Share asks for Touch ID (matched below).
@@ -59,7 +59,7 @@ for _ in $(seq 50); do [ -s "$OUT/rp.out" ] && break; sleep 0.1; done
 LINK=$(head -1 "$OUT/rp.out")
 
 # The take starts folded: wait for the cover display.
-python3 "$ROOT/ios/scripts/follow-displays.py" wait "$UDID" cover "$OUT" &&
+python3 "$ROOT/clients/ios/scripts/follow-displays.py" wait "$UDID" cover "$OUT" &&
     echo "folded, starting"
 
 RECORD="${RECORD:-window}"
@@ -69,12 +69,12 @@ window)
     sleep 1
     # The window's rectangle, read now: `screencapture -l` records a stale one.
     # Don't move the window while recording.
-    RECT=$(swift "$ROOT/ios/scripts/devicehub-window.swift")
+    RECT=$(swift "$ROOT/clients/ios/scripts/devicehub-window.swift")
     screencapture -v -x -R"$RECT" "$OUT/window.mov" &
     FOLLOW=$!
     ;;
 displays)
-    python3 "$ROOT/ios/scripts/follow-displays.py" "$UDID" "$OUT" &
+    python3 "$ROOT/clients/ios/scripts/follow-displays.py" "$UDID" "$OUT" &
     FOLLOW=$!
     ;;
 esac
@@ -87,7 +87,7 @@ Recording. In DeviceHub (keep its window in front, don't move it):
   1. The passport is added on the cover display (about 15 s).
   2. Tap Allow when Passport asks to send notifications; it returns to the Home screen.
 EOF
-wait_display() { python3 "$ROOT/ios/scripts/follow-displays.py" wait "$UDID" "$1" "$OUT"; }
+wait_display() { python3 "$ROOT/clients/ios/scripts/follow-displays.py" wait "$UDID" "$1" "$OUT"; }
 DATA=$(xcrun simctl get_app_container "$UDID" org.solana.passport data)
 until [ -e "$DATA/Documents/demo-home" ]; do sleep 0.5; done
 sleep 3

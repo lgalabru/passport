@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds crates/ffi as a static library for the platform Xcode is building
-# (device or simulator) into ios/RustCore/lib/<platform>/libpassport_ffi.a.
+# (device or simulator) into clients/ios/RustCore/lib/<platform>/libpassport_ffi.a.
 #
 # Run by the "Build Rust core" phase of the Passport target; can also be run by
 # hand: `scripts/build-rust.sh iphoneos release`.
@@ -14,7 +14,7 @@ export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-26.0}"
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
 
 case "$PLATFORM" in
     iphoneos) TARGET=aarch64-apple-ios ;;

@@ -12,6 +12,7 @@ publish = false
 [dev-dependencies]
 passport-driver-emrtd = { workspace = true, features = ["std"] }
 proptest = "1"
+passport-pki = { workspace = true, features = ["fixtures"] }
 
 [lints]
 workspace = true

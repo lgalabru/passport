@@ -98,20 +98,20 @@ relying-party +claims="age.gte(18)":
 # Record the iPhone Duo demo video (start with the Duo folded; you fold and unfold in DeviceHub).
 # RECORD=0 just drives the demo, for recording the DeviceHub window yourself.
 demo-video:
-    ios/scripts/record-demo.sh
+    clients/ios/scripts/record-demo.sh
 
-# Build the Rust core for the iOS app (device + simulator static libs in ios/RustCore/lib)
+# Build the Rust core for the iOS app (device + simulator static libs in clients/ios/RustCore/lib)
 ios-core:
-    ios/scripts/build-rust.sh iphoneos
-    ios/scripts/build-rust.sh iphonesimulator
+    clients/ios/scripts/build-rust.sh iphoneos
+    clients/ios/scripts/build-rust.sh iphonesimulator
 
 # Build the iOS app for the simulator (Xcode runs the Rust core build itself)
 ios-build:
-    xcodebuild -project ios/Passport.xcodeproj -scheme Passport -sdk iphonesimulator \
-        -derivedDataPath ios/build/DerivedData -destination 'generic/platform=iOS Simulator' build
+    xcodebuild -project clients/ios/Passport.xcodeproj -scheme Passport -sdk iphonesimulator \
+        -derivedDataPath clients/ios/build/DerivedData -destination 'generic/platform=iOS Simulator' build
 
 # Build, install and launch on a booted simulator; `just ios-run "iPhone Duo"`
 ios-run device="iPhone Duo": ios-build
     xcrun simctl boot "{{device}}" 2>/dev/null || true
-    xcrun simctl install "{{device}}" ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Passport.app
+    xcrun simctl install "{{device}}" clients/ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Passport.app
     xcrun simctl launch --terminate-running-process "{{device}}" org.solana.passport

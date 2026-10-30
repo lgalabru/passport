@@ -8,6 +8,7 @@ members = [
     "crates/circuits/gadgets/rsa",
     "crates/circuits/gadgets/sha1",
     "crates/circuits/sha1",
+    "crates/pki",
     "crates/attest",
     "crates/cli",
     "crates/core",
@@ -15,7 +16,7 @@ members = [
     "crates/e2e",
     "crates/drivers/*",
     "crates/ffi",
-    "crates/flipper",
+    "clients/flipper",
     "crates/integration",
     "crates/mcp",
     "crates/programs/aa-verifier",
@@ -39,6 +40,7 @@ passport-document = { version = "0.1.0", path = "crates/document", default-featu
 passport-attest = { version = "0.1.0", path = "crates/attest" }
 passport-driver-emrtd = { version = "0.1.0", path = "crates/drivers/emrtd", default-features = false }
 passport-gadget-sha1 = { version = "0.1.0", path = "crates/circuits/gadgets/sha1" }
+passport-pki = { version = "0.1.0", path = "crates/pki" }
 passport-gadget-poseidon = { version = "0.1.0", path = "crates/circuits/gadgets/poseidon" }
 passport-gadget-rsa = { version = "0.1.0", path = "crates/circuits/gadgets/rsa" }
 # xark: Rust circuits -> Groth16 (BN254) -> Solana verifier. Pinned to the commit the
@@ -93,3 +95,12 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 overflow-checks = false
+
+# RSA key generation and big-integer arithmetic are unusably slow unoptimized;
+# the test PKI generates 2048-bit keys in every debug test run.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+[profile.dev.package.num-bigint]
+opt-level = 3
+[profile.dev.package.rsa]
+opt-level = 3

@@ -1,0 +1,32 @@
+[package]
+name = "passport-pki"
+description = "Passive and Active Authentication of eMRTDs: EF.SOD, DSC and CSCA certificates, ISO 9796-2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# A deterministic test PKI (CSCA, DSC, chip key) that signs SODs and answers
+# INTERNAL AUTHENTICATE. For tests and the demo chip; never for real keys.
+fixtures = ["dep:rand_chacha"]
+
+[dependencies]
+rsa = { version = "0.9", features = ["sha2"] }
+sha1 = { version = "0.10", features = ["oid"] }
+sha2 = "0.10"
+p256 = { version = "0.13", features = ["ecdsa"] }
+p384 = { version = "0.13", features = ["ecdsa"] }
+num-bigint = "0.4"
+rand_core = "0.6"
+thiserror = { workspace = true }
+rand_chacha = { version = "0.3", optional = true }
+
+[dev-dependencies]
+# The integration tests use the test PKI.
+passport-pki = { path = ".", features = ["fixtures"] }

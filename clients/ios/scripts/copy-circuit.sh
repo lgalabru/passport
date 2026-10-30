@@ -4,7 +4,7 @@
 # Produce them with `just claim-artifacts`.
 set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$HERE/../crates/circuits/claim/target/xark/passport_claim"
+SRC="$HERE/../../crates/circuits/claim/target/xark/passport_claim"
 DEST="${TARGET_BUILD_DIR:?}/${UNLOCALIZED_RESOURCES_FOLDER_PATH:?}/Circuit"
 for f in circuit.xbc r1cs.min.wcz pk.bin vk.bin; do
     if [ ! -f "$SRC/$f" ]; then

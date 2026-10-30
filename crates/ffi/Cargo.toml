@@ -16,6 +16,8 @@ crate-type = ["staticlib", "lib"]
 [dependencies]
 passport-driver-emrtd = { workspace = true, features = ["std"] }
 passport-attest = { workspace = true }
+# `fixtures`: the demo chip's test PKI and Active Authentication key.
+passport-pki = { workspace = true, features = ["fixtures"] }
 rand = "0.8"
 ark-ff = "0.6"
 serde_json = { workspace = true }

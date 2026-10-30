@@ -61,6 +61,14 @@ pub fn external_authenticate(payload: Vec<u8>) -> CommandApdu {
         .with_le(0x00)
 }
 
+/// INTERNAL AUTHENTICATE (Active Authentication) with the terminal's 8-byte
+/// challenge; the chip answers with its signature, `Le = 00` (up to 256).
+pub fn internal_authenticate(challenge: &[u8; 8]) -> CommandApdu {
+    CommandApdu::new(0x88, 0x00, 0x00)
+        .with_data(challenge.to_vec())
+        .with_le(0x00)
+}
+
 /// P1 bit 8 set means "short file identifier", not an offset.
 pub fn offset_is_valid(offset: u16) -> bool {
     offset & 0x8000 == 0

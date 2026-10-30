@@ -171,11 +171,14 @@ impl fmt::Display for DataGroup {
     }
 }
 
-/// What the reader was asked to fetch: the COM file or one data group.
+/// What the reader was asked to fetch: `EF.COM`, `EF.SOD` or one data group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReadTarget {
     /// `EF.COM` (0x011E) — LDS compression/usage description, read for the advanced menu.
     Com,
+    /// `EF.SOD` (0x011D) — the Document Security Object: the issuing state's
+    /// signature over the data group hashes (Passive Authentication).
+    Sod,
     Dg(DataGroup),
 }
 
@@ -183,6 +186,7 @@ impl ReadTarget {
     pub fn file_id(self) -> u16 {
         match self {
             ReadTarget::Com => 0x011E,
+            ReadTarget::Sod => 0x011D,
             ReadTarget::Dg(dg) => dg.file_id(),
         }
     }
@@ -190,14 +194,15 @@ impl ReadTarget {
     pub fn from_file_id(file_id: u16) -> Option<Self> {
         match file_id {
             0x011E => Some(ReadTarget::Com),
+            0x011D => Some(ReadTarget::Sod),
             other => DataGroup::from_file_id(other).map(ReadTarget::Dg),
         }
     }
 
-    /// Data group number, `None` for `EF.COM`.
+    /// Data group number, `None` for `EF.COM` and `EF.SOD`.
     pub fn dg_number(self) -> Option<u8> {
         match self {
-            ReadTarget::Com => None,
+            ReadTarget::Com | ReadTarget::Sod => None,
             ReadTarget::Dg(dg) => Some(dg.number()),
         }
     }
@@ -208,7 +213,7 @@ impl ReadTarget {
 
     pub fn data_group(self) -> Option<DataGroup> {
         match self {
-            ReadTarget::Com => None,
+            ReadTarget::Com | ReadTarget::Sod => None,
             ReadTarget::Dg(dg) => Some(dg),
         }
     }
@@ -216,6 +221,7 @@ impl ReadTarget {
     pub fn label(self) -> &'static str {
         match self {
             ReadTarget::Com => "COM",
+            ReadTarget::Sod => "SOD",
             ReadTarget::Dg(dg) => dg.label(),
         }
     }
@@ -224,6 +230,7 @@ impl ReadTarget {
     pub fn storage_suffix(self) -> String {
         match self {
             ReadTarget::Com => String::from("-COM"),
+            ReadTarget::Sod => String::from("-SOD"),
             ReadTarget::Dg(dg) => alloc::format!("-DG{}", dg.number()),
         }
     }

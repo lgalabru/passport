@@ -113,7 +113,7 @@ pub fn warning_confirmed(session: &mut Session) -> Nav {
 pub fn read_finished(target: ReadTarget) -> Nav {
     match target {
         ReadTarget::Com => Nav::Push(Scene::AdvancedMenu),
-        ReadTarget::Dg(_) => Nav::Push(Scene::ReadSuccess),
+        ReadTarget::Dg(_) | ReadTarget::Sod => Nav::Push(Scene::ReadSuccess),
     }
 }
 

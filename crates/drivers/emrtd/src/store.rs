@@ -101,6 +101,7 @@ pub fn artifact_name(key: &MrzKey, target: ReadTarget, extension: &str) -> Strin
 fn suffix(target: ReadTarget) -> String {
     match target {
         ReadTarget::Com => String::from("COM"),
+        ReadTarget::Sod => String::from("SOD"),
         ReadTarget::Dg(group) => format!("DG{}", group.number()),
     }
 }

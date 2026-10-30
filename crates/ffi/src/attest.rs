@@ -30,9 +30,6 @@ use serde_json::{Value, json};
 
 use crate::{give, text};
 
-/// How long a claim proof stays valid after it is made.
-const LIFETIME_SECONDS: i64 = 600;
-
 static PROVER: Mutex<Option<Prover>> = Mutex::new(None);
 
 fn error(e: &Error) -> Value {
@@ -287,7 +284,6 @@ pub unsafe extern "C" fn passport_prove(
             audience: request.audience().to_owned(),
             holder: request.holder(),
             issued_at: now,
-            lifetime_seconds: LIFETIME_SECONDS,
         };
         let started = std::time::Instant::now();
         let token = issue(

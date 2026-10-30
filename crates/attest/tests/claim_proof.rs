@@ -16,7 +16,9 @@ use passport_attest::claims::Claim;
 use passport_attest::document::{Date, Document};
 use passport_attest::prover::Prover;
 use passport_attest::registry::Tree;
-use passport_attest::token::{Enrollment, Expectations, Request, issue, verify_token};
+use passport_attest::token::{
+    DEV_ISSUER, Enrollment, Expectations, Request, Roots, issue, verify_token,
+};
 use passport_attest::{Error, oid4vp};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -65,13 +67,15 @@ fn request(claims: Vec<Claim>) -> Request {
         audience: "redirect_uri:https://bar.example/verify".into(),
         holder: "nonce:n-0S6_WzA2Mj".into(),
         issued_at: NOW,
-        lifetime_seconds: 600,
     }
 }
 
 fn prove(mrz: &[u8], claims: Vec<Claim>) -> (String, Request) {
+    prove_request(mrz, request(claims))
+}
+
+fn prove_request(mrz: &[u8], req: Request) -> (String, Request) {
     let e = enrollment(mrz);
-    let req = request(claims);
     let token = issue(
         prover(),
         &req,
@@ -86,11 +90,27 @@ fn prove(mrz: &[u8], claims: Vec<Claim>) -> (String, Request) {
 
 fn expect(req: &Request) -> Expectations<'_> {
     Expectations {
-        audience: Some(&req.audience),
-        holder: Some(&req.holder),
-        now: Some(NOW),
-        roots: None,
+        issuer: DEV_ISSUER,
+        audience: &req.audience,
+        holder: &req.holder,
+        now: NOW,
+        claims: &req.claims,
+        roots: Roots::AnyDevelopment,
     }
+}
+
+/// The rejection, as text, or `"accepted"`.
+fn outcome(token: &str, expect: &Expectations) -> String {
+    match verify_token(token, prover().verifying_key(), expect) {
+        Ok(_) => "accepted".into(),
+        Err(e) => e.to_string(),
+    }
+}
+
+/// Rejected by the pairing check itself: every other expectation agreed with
+/// the (tampered) payload, so only the proof could catch it.
+fn proof_rejects(token: &str, expect: &Expectations) -> bool {
+    outcome(token, expect).contains("the proof does not verify")
 }
 
 fn payload(token: &str) -> Value {
@@ -109,9 +129,7 @@ fn with_payload(token: &str, edit: impl FnOnce(&mut Value)) -> String {
 fn passport_claims_prove_and_verify() {
     let claims = vec![
         Claim::AgeOver(18),
-        Claim::AgeOver(65),
         Claim::Nationality,
-        Claim::ExpiryValid,
         Claim::Birthdate,
         Claim::AgeInYears,
     ];
@@ -120,9 +138,8 @@ fn passport_claims_prove_and_verify() {
     assert_eq!(
         verified.payload["verified_claims"]["claims"],
         json!({
-            "age_equal_or_over": { "18": true, "65": false },
+            "age_equal_or_over": { "18": true },
             "nationalities": ["UTO"],
-            "expiry_date_valid": false,
             "birthdate": "1974-08-12",
             "age_in_years": 52,
         })
@@ -144,65 +161,74 @@ fn id_cards_use_the_td1_offsets() {
 
 #[test]
 fn every_field_the_proof_covers_is_bound() {
-    let (token, _) = prove(TD3, vec![Claim::AgeOver(18), Claim::Nationality]);
-    let vk = prover().verifying_key();
-    let loose = Expectations::default();
-    let rejected = |t: String| matches!(verify_token(&t, vk, &loose), Err(Error::Rejected(_)));
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18), Claim::Nationality]);
+    assert_eq!(outcome(&token, &expect(&req)), "accepted");
 
-    assert!(verify_token(&token, vk, &loose).is_ok());
-    assert!(rejected(with_payload(&token, |p| p["aud"] =
-        json!("redirect_uri:https://evil.example/"))));
-    assert!(rejected(
-        with_payload(&token, |p| p["cnf"]["kid"] = json!("nonce:replayed-0000"))
+    let evil = "redirect_uri:https://evil.example/";
+    let t = with_payload(&token, |p| p["aud"] = json!(evil));
+    assert!(proof_rejects(
+        &t,
+        &Expectations {
+            audience: evil,
+            ..expect(&req)
+        }
     ));
-    assert!(rejected(
-        with_payload(&token, |p| p["iat"] = json!(NOW - 86_400 * 400))
+
+    let replayed = "nonce:replayed-0000";
+    let t = with_payload(&token, |p| p["cnf"]["kid"] = json!(replayed));
+    assert!(proof_rejects(
+        &t,
+        &Expectations {
+            holder: replayed,
+            ..expect(&req)
+        }
     ));
-    assert!(rejected(with_payload(&token, |p| p["sub"] =
-        json!(passport_attest::token::field_b64(Fr::from(1u8))))));
-    assert!(rejected(with_payload(&token, |p| p["zk"]["root"] =
-        json!(passport_attest::token::field_b64(Fr::from(2u8))))));
-    assert!(rejected(with_payload(&token, |p| {
+
+    // Another day, with a verifier whose clock agrees: the date is proven.
+    let yesterday = NOW - 86_400;
+    let t = with_payload(&token, |p| p["iat"] = json!(yesterday));
+    assert!(proof_rejects(
+        &t,
+        &Expectations {
+            now: yesterday,
+            ..expect(&req)
+        }
+    ));
+
+    let t = with_payload(&token, |p| {
+        p["sub"] = json!(passport_attest::token::field_b64(Fr::from(1u8)))
+    });
+    assert!(proof_rejects(&t, &expect(&req)));
+    let t = with_payload(&token, |p| {
+        p["zk"]["root"] = json!(passport_attest::token::field_b64(Fr::from(2u8)))
+    });
+    assert!(proof_rejects(&t, &expect(&req)));
+    let t = with_payload(&token, |p| {
         p["verified_claims"]["claims"]["nationalities"] = json!(["FRA"]);
-    })));
-    assert!(rejected(with_payload(&token, |p| {
+    });
+    assert!(proof_rejects(&t, &expect(&req)));
+    let asked = [Claim::AgeOver(21), Claim::Nationality];
+    let t = with_payload(&token, |p| {
         p["verified_claims"]["claims"]["age_equal_or_over"] = json!({ "21": true });
-    })));
-    // A payload claim the proof cannot account for is malformed, not ignored.
-    assert!(matches!(
-        verify_token(
-            &with_payload(&token, |p| p["name"] = json!("Anna")),
-            vk,
-            &loose
-        ),
-        Err(Error::Payload(_))
+    });
+    assert!(proof_rejects(
+        &t,
+        &Expectations {
+            claims: &asked,
+            ..expect(&req)
+        }
     ));
-    // Expectations: another relying party, another nonce, too late, untrusted root.
-    let other = Expectations {
-        audience: Some("redirect_uri:https://other.example/"),
-        ..Default::default()
-    };
-    assert!(matches!(
-        verify_token(&token, vk, &other),
-        Err(Error::Rejected(_))
-    ));
-    let late = Expectations {
-        now: Some(NOW + 3600),
-        ..Default::default()
-    };
-    assert!(matches!(
-        verify_token(&token, vk, &late),
-        Err(Error::Rejected(_))
-    ));
-    let roots = [Fr::from(3u8)];
-    let pinned = Expectations {
-        roots: Some(&roots),
-        ..Default::default()
-    };
-    assert!(matches!(
-        verify_token(&token, vk, &pinned),
-        Err(Error::Rejected(_))
-    ));
+
+    // A payload claim the proof cannot account for is malformed, not ignored;
+    // that includes `exp`, which the proof does not bind.
+    for (name, value) in [("name", json!("Anna")), ("exp", json!(NOW + 600))] {
+        let t = with_payload(&token, |p| p[name] = value);
+        assert!(matches!(
+            verify_token(&t, prover().verifying_key(), &expect(&req)),
+            Err(Error::Payload(_))
+        ));
+    }
+
     // A different proof spliced onto this payload.
     let (other_token, _) = prove(TD3, vec![Claim::AgeOver(16)]);
     let parts: Vec<&str> = token.split('.').collect();
@@ -212,7 +238,174 @@ fn every_field_the_proof_covers_is_bound() {
         parts[1],
         other_token.split('.').nth(2).unwrap()
     );
-    assert!(rejected(spliced));
+    assert!(proof_rejects(&spliced, &expect(&req)));
+}
+
+#[test]
+fn verifiers_check_audience_holder_and_issuer() {
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18)]);
+    let e = expect(&req);
+    let rejection = |x: Expectations| outcome(&token, &x);
+    assert_eq!(
+        rejection(Expectations {
+            audience: "redirect_uri:https://other.example/",
+            ..e
+        }),
+        "rejected: proof is for another audience"
+    );
+    assert_eq!(
+        rejection(Expectations {
+            holder: "nonce:another",
+            ..e
+        }),
+        "rejected: proof is bound to another holder"
+    );
+    assert_eq!(
+        rejection(Expectations {
+            issuer: "solana:registry",
+            ..e
+        }),
+        "rejected: proof is from another issuer"
+    );
+}
+
+#[test]
+fn a_stale_iat_cannot_move_the_day_the_claims_are_judged_on() {
+    // The specimen expired on 2012-04-15. Proving "as of" 2011 makes
+    // `expiry_date_valid` true; a verifier on today's clock must refuse it.
+    let mut req = request(vec![Claim::ExpiryValid]);
+    req.issued_at = 1_300_000_000; // 2011-03-13
+    let (token, req) = prove_request(TD3, req);
+    assert_eq!(
+        payload(&token)["verified_claims"]["claims"]["expiry_date_valid"],
+        true
+    );
+    assert_eq!(
+        outcome(&token, &expect(&req)),
+        "rejected: proof is too old",
+        "verified against NOW, not the proof's own date"
+    );
+    // The same proof is fine for a verifier whose clock is at its iat.
+    assert_eq!(
+        outcome(
+            &token,
+            &Expectations {
+                now: req.issued_at + 10,
+                ..expect(&req)
+            }
+        ),
+        "accepted"
+    );
+
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18)]);
+    let e = expect(&req);
+    let at = |now: i64| outcome(&token, &Expectations { now, ..e });
+    assert_eq!(
+        at(NOW + passport_attest::token::MAX_AGE_SECONDS),
+        "accepted"
+    );
+    assert_eq!(
+        at(NOW + passport_attest::token::MAX_AGE_SECONDS + 1),
+        "rejected: proof is too old"
+    );
+    assert_eq!(
+        at(NOW - passport_attest::token::CLOCK_SKEW_SECONDS),
+        "accepted"
+    );
+    assert_eq!(
+        at(NOW - passport_attest::token::CLOCK_SKEW_SECONDS - 1),
+        "rejected: proof is from the future"
+    );
+}
+
+#[test]
+fn the_proof_must_establish_exactly_what_was_asked_and_it_must_hold() {
+    // False claims prove fine ("I checked and it is false") but never verify.
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(65)]);
+    assert_eq!(
+        payload(&token)["verified_claims"]["claims"]["age_equal_or_over"]["65"],
+        false
+    );
+    assert_eq!(
+        outcome(&token, &expect(&req)),
+        "rejected: a claim asked for does not hold"
+    );
+    let (token, req) = prove(TD3, vec![Claim::ExpiryValid]);
+    assert_eq!(
+        outcome(&token, &expect(&req)),
+        "rejected: a claim asked for does not hold"
+    );
+
+    // More, fewer or other claims than asked.
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18), Claim::Nationality]);
+    for asked in [
+        vec![Claim::AgeOver(18)],
+        vec![Claim::AgeOver(18), Claim::Nationality, Claim::Birthdate],
+        vec![Claim::AgeOver(21), Claim::Nationality],
+    ] {
+        assert_eq!(
+            outcome(
+                &token,
+                &Expectations {
+                    claims: &asked,
+                    ..expect(&req)
+                }
+            ),
+            "rejected: proof does not establish the claims asked for"
+        );
+    }
+    // Order does not matter.
+    let reordered = [Claim::Nationality, Claim::AgeOver(18)];
+    assert_eq!(
+        outcome(
+            &token,
+            &Expectations {
+                claims: &reordered,
+                ..expect(&req)
+            }
+        ),
+        "accepted"
+    );
+}
+
+#[test]
+fn only_trusted_roots_are_accepted() {
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18)]);
+    let e = enrollment(TD3);
+    let root = tree(&e).root();
+    let trusted = [Fr::from(3u8), root];
+    assert_eq!(
+        outcome(
+            &token,
+            &Expectations {
+                roots: Roots::Trusted(&trusted),
+                ..expect(&req)
+            }
+        ),
+        "accepted"
+    );
+    let untrusted = [Fr::from(3u8)];
+    assert_eq!(
+        outcome(
+            &token,
+            &Expectations {
+                roots: Roots::Trusted(&untrusted),
+                ..expect(&req)
+            }
+        ),
+        "rejected: registry root is not trusted"
+    );
+    let none: [Fr; 0] = [];
+    assert_eq!(
+        outcome(
+            &token,
+            &Expectations {
+                roots: Roots::Trusted(&none),
+                ..expect(&req)
+            }
+        ),
+        "rejected: registry root is not trusted"
+    );
 }
 
 #[test]
@@ -287,7 +480,6 @@ fn openid4vp_round_trip() {
         audience: request.audience().into(),
         holder: request.holder(),
         issued_at: NOW,
-        lifetime_seconds: 600,
     };
     let token = issue(
         prover(),
@@ -304,10 +496,12 @@ fn openid4vp_round_trip() {
 
     // The relying party's side: the nonce it issued and its own client id.
     let expect = Expectations {
-        audience: Some("redirect_uri:https://bar.example/verify"),
-        holder: Some("nonce:n-0S6_WzA2Mj"),
-        now: Some(NOW + 5),
-        roots: None,
+        issuer: DEV_ISSUER,
+        audience: "redirect_uri:https://bar.example/verify",
+        holder: "nonce:n-0S6_WzA2Mj",
+        now: NOW + 5,
+        claims: &[Claim::Nationality, Claim::AgeOver(18)],
+        roots: Roots::AnyDevelopment,
     };
     assert!(verify_token(&token, prover().verifying_key(), &expect).is_ok());
 

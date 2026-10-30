@@ -29,7 +29,6 @@ fn main() {
         audience: "redirect_uri:https://bar.example/".into(),
         holder: "nonce:abcdefgh".into(),
         issued_at: 1_793_361_600,
-        lifetime_seconds: 600,
     };
     for _ in 0..2 {
         let t = Instant::now();

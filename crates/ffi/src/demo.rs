@@ -15,6 +15,8 @@ use passport_driver_emrtd::crypto::{
 use passport_driver_emrtd::lds::asn1::read_length;
 use passport_driver_emrtd::reader::host::Transport;
 use passport_driver_emrtd::types::{MrzKey, TransportError, TransportProtocol};
+use passport_pki::fixtures::{TestChip, TestPki};
+use std::sync::OnceLock;
 
 /// ICAO Doc 9303 Part 4 specimen MRZ (TD3).
 pub const SPECIMEN_MRZ: &[u8; 88] =
@@ -41,12 +43,50 @@ fn tlv(tag: &[u8], value: &[u8]) -> Vec<u8> {
     out
 }
 
-/// `EF.COM` announcing DG1, DG2, DG11 and DG14.
+/// The specimen's issuing state: a test CSCA and Document Signer, and the
+/// chip's Active Authentication key. Fixed seeds, so every build of the app
+/// signs the same SOD; test keys, trusted only by development registries.
+pub struct Specimen {
+    pub pki: TestPki,
+    pub chip: TestChip,
+}
+
+const SPECIMEN_SEED: u64 = 0x5BEC_1BE4;
+
+pub fn specimen() -> &'static Specimen {
+    static SPECIMEN: OnceLock<Specimen> = OnceLock::new();
+    SPECIMEN.get_or_init(|| Specimen {
+        pki: TestPki::generate(SPECIMEN_SEED, "UT"),
+        chip: TestChip::generate(SPECIMEN_SEED),
+    })
+}
+
+/// Data groups as `(number, file)`, and the EF.SOD over them.
+pub type Files = (Vec<(u8, Vec<u8>)>, Vec<u8>);
+
+/// The data groups the chip holds and its EF.SOD.
+pub fn specimen_files() -> &'static Files {
+    static FILES: OnceLock<Files> = OnceLock::new();
+    FILES.get_or_init(|| {
+        let groups = vec![
+            (1, dg1()),
+            (2, dg2()),
+            (11, dg11()),
+            (14, dg14()),
+            (15, specimen().chip.dg15()),
+        ];
+        let refs: Vec<(u8, &[u8])> = groups.iter().map(|(n, f)| (*n, f.as_slice())).collect();
+        let sod = specimen().pki.sign_sod(&refs);
+        (groups, sod)
+    })
+}
+
+/// `EF.COM` announcing DG1, DG2, DG11, DG14 and DG15.
 fn com() -> Vec<u8> {
     let body = [
         tlv(&[0x5F, 0x01], b"0107"),
         tlv(&[0x5F, 0x36], b"040000"),
-        tlv(&[0x5C], &[0x61, 0x75, 0x6B, 0x6E]),
+        tlv(&[0x5C], &[0x61, 0x75, 0x6B, 0x6E, 0x6F]),
     ]
     .concat();
     tlv(&[0x60], &body)
@@ -118,13 +158,16 @@ impl Chip {
             ks_mac: [0; 16],
             ssc: [0; 8],
             authed: false,
-            files: vec![
-                (0x011E, com()),
-                (0x0101, dg1()),
-                (0x0102, dg2()),
-                (0x010B, dg11()),
-                (0x010E, dg14()),
-            ],
+            files: {
+                let (groups, sod) = specimen_files();
+                let mut files = vec![(0x011E, com()), (0x011D, sod.clone())];
+                files.extend(
+                    groups
+                        .iter()
+                        .map(|(n, f)| (0x0100 | u16::from(*n), f.clone())),
+                );
+                files
+            },
             selected: None,
             delay: Duration::from_millis(u64::from(delay_ms)),
         }
@@ -252,6 +295,10 @@ impl Chip {
                     None => (0x6986, Vec::new()),
                 }
             }
+            0x88 => {
+                let challenge: [u8; 8] = data?.try_into().ok()?;
+                (0x9000, specimen().chip.internal_authenticate(&challenge))
+            }
             _ => (0x6D00, Vec::new()),
         };
 
@@ -260,7 +307,12 @@ impl Chip {
         if !out.is_empty() {
             let mut encrypted = do_pad(&out, 8);
             tdes_cbc_encrypt(&self.ks_enc, &[0; 8], &mut encrypted).ok()?;
-            response.extend_from_slice(&[0x87, encrypted.len() as u8 + 1, 0x01]);
+            let len = encrypted.len() + 1;
+            if len < 0x80 {
+                response.extend_from_slice(&[0x87, len as u8, 0x01]);
+            } else {
+                response.extend_from_slice(&[0x87, 0x81, len as u8, 0x01]);
+            }
             response.extend_from_slice(&encrypted);
         }
         response.extend_from_slice(&[0x99, 0x02]);

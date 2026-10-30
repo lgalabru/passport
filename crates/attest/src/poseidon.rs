@@ -1,5 +1,6 @@
-//! Native Poseidon, equal element for element to the `xark-poseidon` gadget the
-//! claim circuit uses (width 3, x⁵, 4 + 56 + 4 rounds, Horizen BN256 constants).
+//! Native Poseidon, equal element for element to the gadget the circuits use:
+//! circomlib's parameters (width 3, x⁵, 4 + 57 + 4 rounds), so `hash2` is
+//! `sol_poseidon` on-chain.
 //!
 //! The circuit tests check the two agree: every public input the tests feed
 //! the circuit is computed here.
@@ -13,7 +14,7 @@ use crate::poseidon_constants::{MDS, ROUND_CONSTANTS};
 
 struct Params {
     mds: [[Fr; 3]; 3],
-    rc: [[Fr; 3]; 64],
+    rc: [[Fr; 3]; 65],
 }
 
 fn params() -> &'static Params {
@@ -43,11 +44,11 @@ fn sbox(x: Fr) -> Fr {
 
 pub fn permute(mut state: [Fr; 3]) -> [Fr; 3] {
     let p = params();
-    for r in 0..64 {
+    for r in 0..65 {
         for (s, c) in state.iter_mut().zip(p.rc[r]) {
             *s += c;
         }
-        if !(4..60).contains(&r) {
+        if !(4..61).contains(&r) {
             state = state.map(sbox);
         } else {
             state[0] = sbox(state[0]);
@@ -83,4 +84,56 @@ pub fn hash_bytes(bytes: &[u8]) -> Fr {
     let mut inputs = vec![Fr::from(bytes.len() as u64)];
     inputs.extend(bytes.chunks(31).map(Fr::from_be_bytes_mod_order));
     hash(&inputs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ark_ff::BigInteger as _;
+    use ark_ff_05::{BigInteger as _, PrimeField as _};
+    use light_poseidon::{Poseidon, PoseidonHasher};
+
+    type Fr05 = ark_bn254_05::Fr;
+
+    fn to05(x: Fr) -> Fr05 {
+        Fr05::from_be_bytes_mod_order(&x.into_bigint().to_bytes_be())
+    }
+
+    fn from05(x: Fr05) -> Fr {
+        Fr::from_be_bytes_mod_order(&x.into_bigint().to_bytes_be())
+    }
+
+    fn reference2(a: Fr, b: Fr) -> Fr {
+        let mut h = Poseidon::<Fr05>::new_circom(2).unwrap();
+        from05(h.hash(&[to05(a), to05(b)]).unwrap())
+    }
+
+    #[test]
+    fn hash2_is_circomlib_poseidon() {
+        // circomlib's own test vector: Poseidon([1, 2]).
+        assert_eq!(
+            hash2(Fr::from(1u8), Fr::from(2u8)).to_string(),
+            "7853200120776062878684798364095072458815029376092732009249414926327459813530"
+        );
+        let mut x = Fr::from(0x5eedu64);
+        for _ in 0..32 {
+            let y = x.square() + Fr::from(7u8);
+            assert_eq!(hash2(x, y), reference2(x, y));
+            x = hash2(y, x);
+        }
+        // The edges of the field.
+        let max = -Fr::from(1u8);
+        assert_eq!(hash2(max, Fr::zero()), reference2(max, Fr::zero()));
+    }
+
+    #[test]
+    fn the_sponge_is_seeded_with_its_length() {
+        // Same inputs, different lengths, different hashes: zero padding
+        // cannot collide with a shorter input.
+        let a = Fr::from(1u8);
+        assert_ne!(hash(&[a]), hash(&[a, Fr::zero()]));
+        assert_ne!(hash(&[a, a]), hash2(a, a));
+        assert_ne!(hash_bytes(b"ab"), hash_bytes(b"ab\0"));
+        assert_ne!(hash_bytes(b""), hash(&[]));
+    }
 }

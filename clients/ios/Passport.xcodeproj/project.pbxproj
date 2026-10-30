@@ -185,10 +185,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(PROJECT_DIR)/../crates/circuits/claim/target/xark/passport_claim/circuit.xbc",
-				"$(PROJECT_DIR)/../crates/circuits/claim/target/xark/passport_claim/r1cs.min.wcz",
-				"$(PROJECT_DIR)/../crates/circuits/claim/target/xark/passport_claim/pk.bin",
-				"$(PROJECT_DIR)/../crates/circuits/claim/target/xark/passport_claim/vk.bin",
+				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/circuit.xbc",
+				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/r1cs.min.wcz",
+				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/pk.bin",
+				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/vk.bin",
 			);
 			name = "Bundle circuit";
 			outputFileListPaths = (

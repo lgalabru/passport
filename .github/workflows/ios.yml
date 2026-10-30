@@ -47,8 +47,8 @@ jobs:
           xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
       - name: Build the app
         run: >
-          xcodebuild -project ios/Passport.xcodeproj -scheme Passport
+          xcodebuild -project clients/ios/Passport.xcodeproj -scheme Passport
           -sdk iphonesimulator -configuration Debug
-          -derivedDataPath ios/build/DerivedData
+          -derivedDataPath clients/ios/build/DerivedData
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO build
