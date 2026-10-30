@@ -15,7 +15,7 @@
 //! | [`attest`] functions | OpenID4VP requests in, claim proofs out (see that module). |
 //! | [`passport_string_free`] | Free any string returned by this crate. |
 //!
-//! The header Swift imports is `ios/RustCore/include/passport_ffi.h`; keep it
+//! The header Swift imports is `clients/ios/RustCore/include/passport_ffi.h`; keep it
 //! in step with the `extern "C"` items here.
 
 mod attest;

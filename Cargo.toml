@@ -16,7 +16,7 @@ members = [
     "crates/e2e",
     "crates/drivers/*",
     "crates/ffi",
-    "crates/flipper",
+    "clients/flipper",
     "crates/integration",
     "crates/mcp",
     "crates/programs/aa-verifier",
