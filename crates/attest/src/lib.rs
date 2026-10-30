@@ -5,6 +5,7 @@
 //! |---|---|
 //! | [`claims`] | The claim vocabulary, its selector bits, payload rendering. |
 //! | [`document`] | The MRZ as the circuit reads it; the date rules. |
+//! | [`enroll`] | The enrollment witness: a read passport as `passport_enroll` inputs. |
 //! | [`registry`] | The commitment tree (a local development stand-in). |
 //! | [`poseidon`] | Native Poseidon equal to the circuit's gadget. |
 //! | [`prover`] | Groth16 over the built `passport_claim` circuit. |
@@ -13,6 +14,7 @@
 
 pub mod claims;
 pub mod document;
+pub mod enroll;
 pub mod oid4vp;
 pub mod poseidon;
 mod poseidon_constants;

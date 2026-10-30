@@ -1,0 +1,16 @@
+[package]
+name = "passport-gadget-lds"
+description = "xark gadgets for ICAO LDS structures: SHA-256 over caller-padded variable-length data, byte windows at private offsets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xark = { workspace = true }
+xark-sha256 = { workspace = true }

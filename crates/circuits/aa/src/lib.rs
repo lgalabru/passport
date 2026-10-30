@@ -32,6 +32,15 @@ mod tests {
         passport_aa(limbs12(&v.sig), limbs12(&v.n), CHALLENGE).unwrap();
     }
 
+    /// A chip may return `J` or `n − J`; both are its signature. (The
+    /// reference vector is one of them; this is the other.)
+    #[test]
+    fn accepts_either_representative() {
+        let v = Vector::reference();
+        let other = &v.n - &v.sig;
+        passport_aa(limbs12(&other), limbs12(&v.n), CHALLENGE).unwrap();
+    }
+
     #[test]
     fn rejects_other_challenge_and_tampered_signature() {
         let v = Vector::reference();

@@ -5259,6 +5259,7 @@ dependencies = [
  "base64 0.22.1",
  "light-poseidon 0.4.1",
  "passport-driver-emrtd",
+ "passport-pki",
  "rand 0.8.8",
  "serde_json",
  "sha2 0.10.9",
@@ -5333,6 +5334,14 @@ dependencies = [
  "flipperzero-rt",
  "flipperzero-sys",
  "passport-driver-emrtd",
+]
+
+[[package]]
+name = "passport-gadget-lds"
+version = "0.1.0"
+dependencies = [
+ "xark",
+ "xark-sha256",
 ]
 
 [[package]]
@@ -5434,6 +5443,19 @@ dependencies = [
  "rand_core 0.6.4",
  "rsa",
  "sha2 0.10.9",
+ "xark",
+ "xark-prover",
+]
+
+[[package]]
+name = "passport_enroll"
+version = "0.1.0"
+dependencies = [
+ "passport-attest",
+ "passport-gadget-lds",
+ "passport-gadget-poseidon",
+ "passport-gadget-rsa",
+ "passport-pki",
  "xark",
  "xark-prover",
 ]
@@ -12896,7 +12918,7 @@ dependencies = [
 [[package]]
 name = "xark"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
@@ -12906,7 +12928,7 @@ dependencies = [
 [[package]]
 name = "xark-backend"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -12932,7 +12954,7 @@ dependencies = [
 [[package]]
 name = "xark-bignum"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "xark",
  "xark-prover",
@@ -12941,15 +12963,24 @@ dependencies = [
 [[package]]
 name = "xark-bits"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "xark",
 ]
 
 [[package]]
+name = "xark-hash"
+version = "0.2.1"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+dependencies = [
+ "xark",
+ "xark-prover",
+]
+
+[[package]]
 name = "xark-ir"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
@@ -12964,7 +12995,7 @@ dependencies = [
 [[package]]
 name = "xark-macros"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12974,7 +13005,7 @@ dependencies = [
 [[package]]
 name = "xark-prover"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -12989,9 +13020,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "xark-sha256"
+version = "0.2.1"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+dependencies = [
+ "xark",
+ "xark-bits",
+ "xark-hash",
+]
+
+[[package]]
 name = "xark-verifier"
 version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"
+source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
 dependencies = [
  "solana-nostd-alt-bn128",
  "solana-program-error 3.0.1",
@@ -13176,8 +13217,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "xark-sha256"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=7a0441c#7a0441c17af6416c1e59d15d0d4804a94647cd1e"

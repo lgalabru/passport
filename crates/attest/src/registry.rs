@@ -20,32 +20,49 @@ pub fn commitment(secret: Fr, mrz_hash: Fr, dg15_hash: Fr, dsc_leaf: Fr) -> Fr {
     hash(&[secret, mrz_hash, dg15_hash, dsc_leaf])
 }
 
-/// An authentication path: siblings and LSB-first position bits.
+/// An authentication path: siblings and LSB-first position bits, one per level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Path {
-    pub siblings: [Fr; DEPTH],
-    pub index_bits: [bool; DEPTH],
+    pub siblings: Vec<Fr>,
+    pub index_bits: Vec<bool>,
 }
 
-/// A sparse depth-20 tree over a short list of leaves.
-#[derive(Debug, Clone, Default)]
+/// A sparse Poseidon tree over a short list of leaves: the commitment
+/// registry (depth [`DEPTH`]) and the DSC list (depth 12).
+#[derive(Debug, Clone)]
 pub struct Tree {
+    depth: usize,
     leaves: Vec<Fr>,
 }
 
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
 /// Roots of empty subtrees: `zeros[0] = 0`, `zeros[i + 1] = hash2(zeros[i], zeros[i])`.
-fn zeros() -> [Fr; DEPTH + 1] {
-    let mut z = [Fr::zero(); DEPTH + 1];
-    for i in 0..DEPTH {
+pub fn zeros(depth: usize) -> Vec<Fr> {
+    let mut z = vec![Fr::zero(); depth + 1];
+    for i in 0..depth {
         z[i + 1] = hash2(z[i], z[i]);
     }
     z
 }
 
 impl Tree {
+    /// A registry tree, depth [`DEPTH`].
     pub fn new(leaves: Vec<Fr>) -> Self {
-        assert!(leaves.len() <= 1 << DEPTH, "tree is full");
-        Self { leaves }
+        Self::with_depth(DEPTH, leaves)
+    }
+
+    pub fn with_depth(depth: usize, leaves: Vec<Fr>) -> Self {
+        assert!(leaves.len() <= 1 << depth, "tree is full");
+        Self { depth, leaves }
+    }
+
+    pub fn depth(&self) -> usize {
+        self.depth
     }
 
     pub fn leaves(&self) -> &[Fr] {
@@ -54,9 +71,9 @@ impl Tree {
 
     /// Every level, bottom up, padded on the right with empty subtrees.
     fn levels(&self) -> Vec<Vec<Fr>> {
-        let z = zeros();
+        let z = zeros(self.depth);
         let mut levels = vec![self.leaves.clone()];
-        for depth in 0..DEPTH {
+        for depth in 0..self.depth {
             let below = &levels[depth];
             let next = below
                 .chunks(2)
@@ -68,19 +85,19 @@ impl Tree {
     }
 
     pub fn root(&self) -> Fr {
-        self.levels()[DEPTH]
+        self.levels()[self.depth]
             .first()
             .copied()
-            .unwrap_or(zeros()[DEPTH])
+            .unwrap_or(zeros(self.depth)[self.depth])
     }
 
     pub fn path(&self, index: usize) -> Path {
-        let z = zeros();
+        let z = zeros(self.depth);
         let levels = self.levels();
-        let mut siblings = [Fr::zero(); DEPTH];
-        let mut index_bits = [false; DEPTH];
+        let mut siblings = vec![Fr::zero(); self.depth];
+        let mut index_bits = vec![false; self.depth];
         let mut i = index;
-        for depth in 0..DEPTH {
+        for depth in 0..self.depth {
             index_bits[depth] = i & 1 == 1;
             siblings[depth] = levels[depth].get(i ^ 1).copied().unwrap_or(z[depth]);
             i >>= 1;
@@ -95,7 +112,7 @@ impl Tree {
     pub fn fold(leaf: Fr, path: &Path) -> Fr {
         path.siblings
             .iter()
-            .zip(path.index_bits)
+            .zip(path.index_bits.iter().copied())
             .fold(leaf, |node, (&sibling, right)| {
                 if right {
                     hash2(sibling, node)

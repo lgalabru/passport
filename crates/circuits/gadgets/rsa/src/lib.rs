@@ -276,8 +276,10 @@ fn sha256_digest_info() -> [Field; 19] {
 /// The message representative is `6A || M1 || SHA-1(M1 || M2) || BC` with
 /// `M1` the 106 recoverable bytes chosen by the chip and `M2` the 8-byte
 /// challenge. ISO 9796-2 lets the signer return either `J` or `n − J`, so the
-/// circuit accepts the representative being `s^e` or `n − s^e`, chosen by one
-/// advice bit; either way every byte of it is then pinned by the checks.
+/// representative is `s^e` or `n − s^e`: whichever ends in `0xBC`. With `n`
+/// odd exactly one of them can (`n − t ≡ 0xBC` would need `n ≡ 0x78 mod 256`),
+/// so the choice is derived from the low byte of `s^e`, never left to the
+/// prover, and every byte of the chosen one is then pinned by the checks.
 ///
 /// Returns `M1` so a caller can bind the chip's nonce if it wants to.
 pub fn iso9796_2_s1_sha1_verify_1024(
@@ -286,8 +288,16 @@ pub fn iso9796_2_s1_sha1_verify_1024(
     m2: [Field; 8],
 ) -> [Field; 106] {
     let t = modexp_65537::<12>(sig, m);
-    let sel = Field::advice();
-    sel.require_bool();
+    // `t` is canonical (`< n`) and limb-ranged; its low byte decides.
+    let low = t[0].to_bits::<86>();
+    let mut low_byte = [Field::from(0u8); 8];
+    let mut i = 0usize;
+    while i < 8usize {
+        low_byte[i] = low[i];
+        i += 1;
+    }
+    let ends_bc = Field::from((Field::from_bits::<8>(low_byte) - Field::from(0xBCu8)).is_zero());
+    let sel = Field::from(1u8) - ends_bc;
     let neg = mod_neg::<12, 86>(t, m.n);
     let mut f = [Field::from(0u8); 12];
     let mut i = 0usize;

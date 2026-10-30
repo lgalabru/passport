@@ -4,7 +4,9 @@ members = [
     "crates/circuits/aa",
     "crates/circuits/claim",
     "crates/circuits/dsc-sig",
+    "crates/circuits/enroll",
     "crates/circuits/rsa2048",
+    "crates/circuits/gadgets/lds",
     "crates/circuits/gadgets/poseidon",
     "crates/circuits/gadgets/rsa",
     "crates/circuits/gadgets/sha1",
@@ -42,6 +44,8 @@ passport-attest = { version = "0.1.0", path = "crates/attest" }
 passport-driver-emrtd = { version = "0.1.0", path = "crates/drivers/emrtd", default-features = false }
 passport-gadget-sha1 = { version = "0.1.0", path = "crates/circuits/gadgets/sha1" }
 passport-pki = { version = "0.1.0", path = "crates/pki" }
+passport-gadget-lds = { version = "0.1.0", path = "crates/circuits/gadgets/lds" }
+xark-sha256 = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
 passport-gadget-poseidon = { version = "0.1.0", path = "crates/circuits/gadgets/poseidon" }
 passport-gadget-rsa = { version = "0.1.0", path = "crates/circuits/gadgets/rsa" }
 # xark: Rust circuits -> Groth16 (BN254) -> Solana verifier. Pinned to the commit the
@@ -107,15 +111,15 @@ opt-level = 3
 opt-level = 3
 
 # RSA-2048 needs 24 bignum limbs; upstream caps at 16 until
-# blueshift-gg/xark#36 lands. The fork is 74817fa plus that change, so the
-# installed xark-rustc (built from 74817fa) still matches.
+# upstream lifts it; the fork's `passport` branch is 74817fa plus that and
+# a public sha256 `compress`, so the installed xark-rustc (74817fa) matches.
 [patch."https://github.com/blueshift-gg/xark"]
-xark = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-bits = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-bignum = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-prover = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-verifier = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-ir = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-backend = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-macros = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
-xark-sha256 = { git = "https://github.com/lgalabru/xark", rev = "7a0441c" }
+xark = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-bits = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-bignum = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-prover = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-verifier = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-ir = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-backend = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-macros = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
+xark-sha256 = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }

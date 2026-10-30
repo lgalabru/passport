@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 passport-driver-emrtd = { workspace = true, features = ["std"] }
+passport-pki = { workspace = true }
 xark-prover = { workspace = true }
 xark-ir = { workspace = true }
 xark-backend = { workspace = true }
@@ -33,4 +34,5 @@ workspace = true
 # its own arkworks version, compared through decimal strings.
 light-poseidon = "0.4"
 ark-bn254-05 = { package = "ark-bn254", version = "0.5" }
+passport-pki = { workspace = true, features = ["fixtures"] }
 ark-ff-05 = { package = "ark-ff", version = "0.5" }

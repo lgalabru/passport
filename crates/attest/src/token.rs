@@ -153,7 +153,10 @@ pub fn witness(
     inputs.extend(named("siblings", &siblings));
     inputs.extend(named(
         "index_bits",
-        &index_bits.map(|b| Fr::from(u8::from(b))),
+        &index_bits
+            .iter()
+            .map(|&b| Fr::from(u8::from(b)))
+            .collect::<Vec<_>>(),
     ));
     inputs.push(("holder_sq".into(), holder * holder));
     inputs.push(("current_year".into(), Fr::from(today.year())));
