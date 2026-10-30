@@ -23,6 +23,7 @@ pub mod registry;
 pub mod token;
 
 pub use ark_bn254::Fr;
+pub use ark_ff;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

@@ -25,9 +25,35 @@ pub const ALG: &str = "groth16-bn254";
 /// `iss` while the registry is the local development tree.
 pub const DEV_ISSUER: &str = "dev:local-registry";
 
+/// `iss` for the on-chain registry program at `program_id` (base58).
+pub fn registry_issuer(program_id: &str) -> String {
+    format!("solana:{program_id}")
+}
+
+/// `verified_claims.verification.evidence[0].method`: `zk_dev` for a tree
+/// that vouches for nothing, `zk_enrolled` for a registry that admitted the
+/// commitment on an enrollment proof.
+pub fn evidence_method(issuer: &str) -> &'static str {
+    if issuer == DEV_ISSUER {
+        "zk_dev"
+    } else {
+        "zk_enrolled"
+    }
+}
+
+fn verification(issuer: &str) -> Value {
+    json!({
+        "trust_framework": "icao_9303_zk",
+        "evidence": [{ "type": "document", "method": evidence_method(issuer) }],
+    })
+}
+
 /// What a relying party asked for, in circuit terms.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
+    /// The registry the commitment is enrolled in: [`DEV_ISSUER`] for a tree
+    /// built locally, [`registry_issuer`] for the on-chain registry.
+    pub issuer: String,
     pub claims: Vec<Claim>,
     /// The relying party; becomes `aud` and the scope of the nullifier.
     pub audience: String,
@@ -194,16 +220,13 @@ pub fn issue<R: RngCore + CryptoRng>(
     );
     let header = json!({ "typ": TYP, "alg": ALG, "kid": key_id(prover.verifying_key()) });
     let payload = json!({
-        "iss": DEV_ISSUER,
+        "iss": request.issuer,
         "sub": field_b64(public[2]),
         "aud": request.audience,
         "cnf": { "kid": request.holder },
         "iat": request.issued_at,
         "verified_claims": {
-            "verification": {
-                "trust_framework": "icao_9303_zk",
-                "evidence": [{ "type": "document", "method": "zk_dev" }],
-            },
+            "verification": verification(&request.issuer),
             "claims": render(&statement),
         },
         "zk": { "root": field_b64(public[0]) },
@@ -313,10 +336,7 @@ pub fn verify_token(
     let root = field_from_b64(&text(&payload["zk"]["root"], "zk.root")?)?;
     let nullifier = field_from_b64(&text(&payload["sub"], "sub")?)?;
     let iss = text(&payload["iss"], "iss")?;
-    let verification = &payload["verified_claims"]["verification"];
-    if verification
-        != &json!({ "trust_framework": "icao_9303_zk", "evidence": [{ "type": "document", "method": "zk_dev" }] })
-    {
+    if payload["verified_claims"]["verification"] != verification(&iss) {
         return Err(Error::Payload("unexpected verification block".into()));
     }
     let statement = parse_rendered(&payload["verified_claims"]["claims"])?;

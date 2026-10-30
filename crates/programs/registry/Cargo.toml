@@ -1,0 +1,30 @@
+[package]
+name = "passport-registry"
+description = "Solana program: the passport registry. Verifies passport_enroll proofs, allows one enrollment per document, keeps the commitment tree and its recent roots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+pinocchio = "0.11.2"
+pinocchio-system = "0.6.1"
+xark-verifier = { workspace = true }
+solana-define-syscall = "3"
+
+# Off-chain (host tests, clients) the Poseidon syscall is light-poseidon,
+# the implementation behind it.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+light-poseidon = "0.4"
+# PDA derivation off-chain (on-chain it is a syscall).
+solana-address = { version = "2", features = ["curve25519"] }
+ark-bn254-05 = { package = "ark-bn254", version = "0.5" }
+ark-ff-05 = { package = "ark-ff", version = "0.5" }

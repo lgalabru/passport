@@ -280,6 +280,7 @@ pub unsafe extern "C" fn passport_prove(
             .ok_or_else(|| Error::Circuit("prover not loaded".into()))?;
         let tree = Tree::new(vec![enrollment.commitment()]);
         let claim_request = Request {
+            issuer: passport_attest::token::DEV_ISSUER.into(),
             claims: request.claims.clone(),
             audience: request.audience().to_owned(),
             holder: request.holder(),

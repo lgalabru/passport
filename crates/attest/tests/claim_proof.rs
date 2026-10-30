@@ -63,6 +63,7 @@ fn tree(e: &Enrollment) -> Tree {
 
 fn request(claims: Vec<Claim>) -> Request {
     Request {
+        issuer: passport_attest::token::DEV_ISSUER.into(),
         claims,
         audience: "redirect_uri:https://bar.example/verify".into(),
         holder: "nonce:n-0S6_WzA2Mj".into(),
@@ -476,6 +477,7 @@ fn openid4vp_round_trip() {
 
     let e = enrollment(TD3);
     let req = Request {
+        issuer: passport_attest::token::DEV_ISSUER.into(),
         claims: request.claims.clone(),
         audience: request.audience().into(),
         holder: request.holder(),

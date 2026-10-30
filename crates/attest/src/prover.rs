@@ -107,6 +107,12 @@ impl Prover {
     }
 }
 
+/// `proof` in the layout `xark-verifier` takes on-chain: `-A ‖ B ‖ C`,
+/// little-endian.
+pub fn proof_le(proof: &Proof<Bn254>) -> Vec<u8> {
+    xark_backend::solana::assemble_proof_bytes_le(proof)
+}
+
 pub fn verify(vk: &VerifyingKey<Bn254>, proof: &Proof<Bn254>, public: &[Fr]) -> Result<bool> {
     let pvk = PreparedVerifyingKey::from(vk.clone());
     Groth16::<Bn254>::verify_with_processed_vk(&pvk, public, proof)

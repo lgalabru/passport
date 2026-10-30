@@ -23,6 +23,7 @@ members = [
     "crates/integration",
     "crates/mcp",
     "crates/programs/aa-verifier",
+    "crates/programs/registry",
     "crates/types",
 ]
 default-members = ["crates/cli"]

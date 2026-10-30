@@ -77,7 +77,7 @@ program-build:
 # End to end: build the program, start an in-process surfpool (surfpool-sdk), deploy,
 # verify a proof on-chain (needs cargo-build-sbf)
 e2e:
-    cargo test -p passport-e2e -- --ignored --nocapture
+    cargo test --release -p passport-e2e -- --ignored --nocapture
 
 # Line coverage (needs cargo-llvm-cov); target is >80%
 coverage:

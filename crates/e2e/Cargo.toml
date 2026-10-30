@@ -1,6 +1,6 @@
 [package]
 name = "passport-e2e"
-description = "End-to-end tests on an in-process surfpool (surfpool-sdk): build the verifier program, deploy it, verify a passport_aa proof on-chain"
+description = "End-to-end tests on an in-process surfpool (surfpool-sdk): the AA verifier, and the registry with a real enrollment and a claim proof checked against its root"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,10 @@ workspace = true
 
 [dev-dependencies]
 passport-aa-verifier = { path = "../programs/aa-verifier" }
+passport-registry = { path = "../programs/registry" }
+passport-attest = { workspace = true }
+passport-pki = { workspace = true, features = ["fixtures"] }
+rand = "0.8"
 # The surfnet runs inside the test process. Keypair, Pubkey, Signer and RpcClient
 # come from its re-exports so the Solana crate versions line up with its RPC client.
 surfpool-sdk = "1.6"

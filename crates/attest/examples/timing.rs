@@ -25,6 +25,7 @@ fn main() {
     };
     let tree = Tree::new(vec![e.commitment()]);
     let req = Request {
+        issuer: passport_attest::token::DEV_ISSUER.into(),
         claims: vec![Claim::AgeOver(18)],
         audience: "redirect_uri:https://bar.example/".into(),
         holder: "nonce:abcdefgh".into(),
