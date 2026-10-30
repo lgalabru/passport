@@ -231,6 +231,39 @@ on low-end ones.
 
 ---
 
+## 4.4 Toolchain: xark
+
+Stages 2 and 3 use [xark](https://github.com/blueshift-gg/xark) rather than
+circom: circuits are `no_std` Rust lowered through rustc MIR to R1CS, proved
+with Groth16 over BN254, and verified by a generated Solana program over the
+alt_bn128 syscalls. It ships the trusted-setup ceremony tooling and a WASM
+prover. It has Lean soundness models but no external audit.
+
+Two gadgets the passport relation needs were missing from xark. They now live
+in this repo under `crates/circuits/gadgets/` with circuit crates and
+reference-vector tests (against the `sha1` and `rsa` crates) under
+`crates/circuits/`. Constraint counts as reported by `xark build`:
+
+| Circuit | Constraints | Notes |
+|---|---|---|
+| `passport_sha1`: SHA-1 over 56 bytes (2 blocks) | 34,276 | FIPS 180-4, same construction as `xark-sha256`. |
+| `passport_dsc_sig`: RSA-1024 PKCS#1 v1.5 / SHA-256 | 98,234 | 17 non-native `mod_mul` over 12 × 86-bit limbs. |
+| `passport_aa`: RSA-1024 ISO 9796-2 scheme 1 / SHA-1 | 133,034 | The Active Authentication check, SHA-1 over 114 bytes included. |
+
+The verifier side is exercised end to end: `crates/programs/aa-verifier`
+bakes in the exported verifying key, and `crates/e2e` deploys it to an
+in-process surfpool (`surfpool-sdk`) and verifies the reference proof on-chain, rejecting a tampered proof
+and a changed public input (`just e2e`). The on-chain check costs 162,659
+compute units with 20 public inputs. Keys are dev-mode and deterministic;
+a real ceremony comes before any deployment.
+
+Still missing in xark for the full relation: a circomlib-parameter Poseidon
+(xark's uses Horizen zkhash constants, which `sol_poseidon` does not match),
+RSA-2048 (needs 24 limbs, above `xark-bignum`'s current 16-limb cap), and
+fixed-offset SOD and DSC parsing.
+
+---
+
 ## 5. Threat model notes
 
 Carried over from TIP-1142, with Solana-specific remarks.

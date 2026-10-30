@@ -1,0 +1,17 @@
+[package]
+name = "passport-gadget-rsa"
+description = "RSA verification gadgets for xark circuits: modexp (e = 65537), PKCS#1 v1.5, ISO/IEC 9796-2 scheme 1 (Active Authentication)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xark = { workspace = true }
+xark-bignum = { workspace = true }
+passport-gadget-sha1 = { workspace = true }
