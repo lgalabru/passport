@@ -355,9 +355,9 @@ each piece proves and what is still trusted.
 | 4. SOD, DG15, Active Authentication | Done in the reader (`ReadTarget::Sod`, `active_authenticate`) and natively in `crates/pki` (Passive Authentication to trusted CSCAs, ISO 9796-2). |
 | 5. circomlib Poseidon | Done: the gadget and native hash equal `sol_poseidon`. |
 | 6. RSA-2048 | Done: 24-limb bignum on the `lgalabru/xark` fork (`passport` branch); PKCS#1 v1.5 / SHA-256 in 206k constraints. |
-| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 9 s on an M-series Mac. |
-| 8. Registry program | Done: `crates/programs/registry` (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree on `sol_poseidon`, recent roots). The publisher's DSC tree comes from `enroll::dsc_tree`. |
-| 9. Ceremony and audits | The ceremony tool is done (`crates/ceremony`); the ceremony itself and the audits are not. |
+| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree for the MRZ's issuing state, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 9 s on an M-series Mac. |
+| 8. Registry program | Done: `crates/programs/registry` (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree on `sol_poseidon`, recent roots). Only the program's upgrade authority can initialize it, and lamports sent to a PDA ahead of time cannot block it. The publisher's DSC tree comes from `enroll::dsc_tree`, which checks each DSC's chain, roles (keyUsage, basicConstraints, not a Master List Signer) and dates. |
+| 9. Ceremony and audits | The ceremony tool is done (`crates/ceremony`; it accepts a phase 1 only by a hash it knows or the operator gives); the ceremony itself and the audits are not. |
 
 Where v1 departs from the text above:
 
@@ -367,6 +367,10 @@ Where v1 departs from the text above:
 - `sanctions_not_in` keeps its selector bit (8) but the circuit rejects it.
 - The document nullifier is `Poseidon("doc", H(DG15))`: one enrollment per
   chip key, no salt service. Anyone who has read the chip can recognize it.
+- The DSC leaf is `Poseidon(Poseidon(modulus limbs), issuing state)`, the
+  state being the MRZ code the publisher trusts the signer's CSCA for
+  (`passport_pki::Anchor`); the circuit takes it from the MRZ, so the
+  `issuing_country` claim is the signer's state.
 - The AA challenge is the commitment's low 64 bits, so the chip's signature
   binds the enrollment; the enroll circuit supports RSA-1024 AA keys only.
 - `iss` is `solana:<registry program id>` for enrolled commitments and
@@ -374,7 +378,11 @@ Where v1 departs from the text above:
   `zk_enrolled` and `zk_dev`).
 - `scope` and `holder` are `Poseidon(len, 31-byte chunks…)` of `aud` and
   `cnf.kid`. Over OpenID4VP, `aud` is the `client_id` and `cnf.kid` is
-  `nonce:<nonce>`; a holder key binding is not in v1.
+  `nonce:<nonce>`; a holder key binding is not in v1. The wallet accepts only
+  `redirect_uri:` client ids equal to the response URI until it checks
+  request signatures, so a proof's audience is where it is sent.
+- Header and payload are canonical (compact JSON, sorted keys, only the
+  members the proof covers); verifiers compare the bytes.
 
 What is left:
 
