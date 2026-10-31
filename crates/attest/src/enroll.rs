@@ -16,7 +16,7 @@ use passport_pki::{ChipKey, Sod};
 use sha2::{Digest, Sha256};
 
 use crate::document::Document;
-use crate::poseidon::hash;
+use crate::poseidon::{hash, hash2};
 use crate::registry::Tree;
 use crate::token::{Enrollment, NamedInputs};
 use crate::{Error, Fr, Result};
@@ -86,9 +86,15 @@ pub fn limbs(be: &[u8], n: usize) -> Vec<Fr> {
         .collect()
 }
 
-/// The DSC tree leaf: Poseidon over the modulus' 24 limbs.
-pub fn dsc_leaf(modulus: &[u8]) -> Fr {
-    hash(&limbs(modulus, 24))
+/// The DSC tree leaf: the modulus' 24 limbs and the issuing state the
+/// signer may sign for (`"UTO"` → `0x55544F`), so its documents can only
+/// enroll with that state in their MRZ.
+pub fn dsc_leaf(modulus: &[u8], issuing_state: [u8; 3]) -> Fr {
+    let [a, b, c] = issuing_state.map(u32::from);
+    hash2(
+        hash(&limbs(modulus, 24)),
+        Fr::from((a << 16) | (b << 8) | c),
+    )
 }
 
 /// `SHA-256(DG15)`, first 31 bytes as a field element.
@@ -146,39 +152,29 @@ fn dsc_modulus(sod: &Sod) -> Result<Vec<u8>> {
 }
 
 /// The registry publisher's DSC tree: each Document Signer certificate is
-/// checked against the trusted CSCAs and for validity on `today`
-/// (`YYYYMMDD`), and only RSA-2048 signers (what the circuit verifies) are
-/// listed. Returns the tree and, per certificate, its leaf index or why it
-/// was left out.
+/// checked against the trusted CSCAs (chain, roles, validity on `today`,
+/// `YYYYMMDD`), and only RSA-2048 signers (what the circuit verifies) are
+/// listed, each with the issuing state of the CSCA that issued it. Returns
+/// the tree and, per certificate, its leaf index or why it was left out.
 pub fn dsc_tree(
     trust: &passport_pki::Trust,
     certificates: &[Vec<u8>],
     today: u32,
 ) -> (Tree, Vec<std::result::Result<usize, String>>) {
     use passport_pki::cert::Certificate;
-    let cscas: Vec<Certificate> = trust
-        .cscas
-        .iter()
-        .filter_map(|c| Certificate::parse(c).ok())
-        .collect();
     let mut leaves = Vec::new();
     let outcome = certificates
         .iter()
         .map(|der| {
             let cert = Certificate::parse(der).map_err(|e| e.to_string())?;
-            let csca = cscas
-                .iter()
-                .find(|c| cert.verify_issued_by(c).is_ok())
-                .ok_or("not issued by a trusted CSCA")?;
-            if !cert.valid_on(today) || !csca.valid_on(today) {
-                return Err("not valid on this date".to_string());
-            }
+            let anchor =
+                passport_pki::trusted_signer(&cert, trust, today).map_err(|e| e.to_string())?;
             let spki = der::parse(cert.spki).map_err(|e| e.to_string())?;
             let ChipKey::Rsa { n, e } = ChipKey::from_spki(spki).map_err(|e| e.to_string())?;
             if e != 65537u32.into() || n.bits() != 2048 {
                 return Err("not an RSA-2048 signer".to_string());
             }
-            leaves.push(dsc_leaf(&n.to_bytes_be()));
+            leaves.push(dsc_leaf(&n.to_bytes_be(), anchor.issuing_state));
             Ok(leaves.len() - 1)
         })
         .collect();
@@ -199,11 +195,14 @@ pub fn prepare(secret: Fr, passport: &Passport) -> Result<Prepared> {
     let sod = Sod::parse(passport.sod).map_err(|e| Error::Document(e.to_string()))?;
     let modulus = dsc_modulus(&sod)?;
     let dg15_hash = dg15_field(passport.dg15);
+    // The circuit reads the state from the MRZ; the DSC tree must list this
+    // signer for it.
+    let issuing_state = document.mrz[2..5].try_into().expect("3 bytes");
     let enrollment = Enrollment {
         secret,
         document,
         dg15_hash,
-        dsc_leaf: dsc_leaf(&modulus),
+        dsc_leaf: dsc_leaf(&modulus, issuing_state),
     };
     let commitment = enrollment.commitment();
     Ok(Prepared {
@@ -399,25 +398,50 @@ mod tests {
         let ours = TestPki::generate(51, "UT");
         let theirs = TestPki::generate(52, "UT");
         let expired = TestPki::generate_with(53, "UT", "200101000000Z", "211231235959Z");
+        use passport_pki::fixtures::Role;
+        let france = TestPki::generate(54, "FR");
         let mut trust = ours.trust();
-        trust.cscas.push(expired.csca_cert.clone());
+        trust.cscas.push(expired.anchor_for(*b"UTO"));
+        trust.cscas.push(france.anchor_for(*b"FRA"));
+        let list_signer = ours.issue(&theirs.dsc_key, &[0x77], Role::MasterListSigner);
         let certs = vec![
             ours.dsc_cert.clone(),
             theirs.dsc_cert.clone(),
             expired.dsc_cert.clone(),
             b"not a certificate".to_vec(),
+            list_signer,
+            ours.csca_cert.clone(),
+            france.dsc_cert.clone(),
         ];
         let (tree, outcome) = dsc_tree(&trust, &certs, 20261030);
         assert_eq!(outcome[0], Ok(0));
-        assert_eq!(outcome[1], Err("not issued by a trusted CSCA".into()));
-        assert_eq!(outcome[2], Err("not valid on this date".into()));
+        let untrusted = passport_pki::Error::UntrustedSigner.to_string();
+        assert_eq!(outcome[1], Err(untrusted));
+        assert_eq!(
+            outcome[2],
+            Err(passport_pki::Error::NotValidNow("document signer").to_string())
+        );
         assert!(outcome[3].is_err());
-        assert_eq!(tree.leaves().len(), 1);
-        let modulus = {
-            let sod = ours.sign_sod(&[(1, b"x")]);
+        assert!(
+            outcome[4].as_ref().unwrap_err().contains("Master List"),
+            "{:?}",
+            outcome[4]
+        );
+        assert!(
+            outcome[5].as_ref().unwrap_err().contains("CA certificate"),
+            "{:?}",
+            outcome[5]
+        );
+        assert_eq!(outcome[6], Ok(1));
+        assert_eq!(tree.leaves().len(), 2);
+        let modulus = |pki: &TestPki| {
+            let sod = pki.sign_sod(&[(1, b"x")]);
             dsc_modulus(&Sod::parse(&sod).unwrap()).unwrap()
         };
-        assert_eq!(tree.leaves()[0], dsc_leaf(&modulus));
+        // Each signer is listed for its CSCA's state only.
+        assert_eq!(tree.leaves()[0], dsc_leaf(&modulus(&ours), *b"UTO"));
+        assert_eq!(tree.leaves()[1], dsc_leaf(&modulus(&france), *b"FRA"));
+        assert_ne!(tree.leaves()[1], dsc_leaf(&modulus(&france), *b"UTO"));
     }
 
     #[test]

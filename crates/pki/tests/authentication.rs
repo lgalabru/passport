@@ -4,7 +4,7 @@
 use std::sync::OnceLock;
 
 use num_bigint::BigUint;
-use passport_pki::fixtures::{TestChip, TestPki};
+use passport_pki::fixtures::{Role, TestChip, TestPki};
 use passport_pki::{Error, Sod, Trust, passive_authentication, verify_active_authentication};
 
 const TODAY: u32 = 20261030;
@@ -128,6 +128,65 @@ fn a_sod_signed_by_anyone_else_fails() {
         Error::UntrustedSigner
     );
     passive_authentication(&foreign, &[(1, DG1)], &other_pki().trust(), TODAY).unwrap();
+}
+
+/// A CSCA certifies more than Document Signers: Master List Signers, its own
+/// links, sometimes sub-CAs. Only a Document Signer may sign a SOD.
+#[test]
+fn only_document_signers_sign_documents() {
+    let key = &other_pki().dsc_key;
+    let as_role = |role: Role| {
+        let cert = pki().issue(key, &[0x55], role);
+        check(
+            &pki().sign_sod_as(&[(1, DG1)], key, &cert, &[0x55]),
+            &[(1, DG1)],
+        )
+    };
+    as_role(Role::DocumentSigner).unwrap();
+    assert_eq!(
+        as_role(Role::MasterListSigner),
+        Err(Error::WrongRole("a Master List or Deviation List Signer"))
+    );
+    assert_eq!(
+        as_role(Role::SubCa),
+        Err(Error::WrongRole("a CA certificate as a Document Signer"))
+    );
+    assert_eq!(
+        as_role(Role::Bare),
+        Err(Error::WrongRole(
+            "a Document Signer without keyUsage digitalSignature"
+        ))
+    );
+}
+
+/// A trust anchor is a CA certificate: a Document Signer listed as one does
+/// not let its key certify others.
+#[test]
+fn only_ca_certificates_anchor_trust() {
+    let (sod, _) = document();
+    let mut trust = pki().trust();
+    trust.cscas[0].csca = pki().dsc_cert.clone();
+    assert_eq!(
+        passive_authentication(&sod, &[(1, DG1)], &trust, TODAY).unwrap_err(),
+        Error::UntrustedSigner
+    );
+}
+
+/// One trusted state's signer cannot vouch for another state's documents:
+/// the MRZ's issuing state must be the one the CSCA is trusted for.
+#[test]
+fn the_issuing_state_is_the_csca_s() {
+    let (sod, _) = document();
+    passive_authentication(&sod, &[(1, DG1)], &pki().trust_for(*b"UTO"), TODAY).unwrap();
+    assert_eq!(
+        passive_authentication(&sod, &[(1, DG1)], &pki().trust_for(*b"FRA"), TODAY).unwrap_err(),
+        Error::WrongIssuingState
+    );
+    // A state's own document claiming another state is refused too.
+    let mut dg1 = DG1.to_vec();
+    dg1[7..10].copy_from_slice(b"FRA");
+    let sod = pki().sign_sod(&[(1, &dg1)]);
+    assert_eq!(check(&sod, &[(1, &dg1)]), Err(Error::WrongIssuingState));
 }
 
 #[test]

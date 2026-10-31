@@ -215,6 +215,30 @@ fn the_document_signer_must_be_trusted_and_must_have_signed() {
     assert!(!solves(&inputs(&forged)));
 }
 
+/// A signer the publisher trusts for one state cannot enroll a document of
+/// another: the leaf the circuit looks up carries the MRZ's issuing state.
+#[test]
+fn the_signer_is_trusted_for_the_documents_issuing_state() {
+    let d = doc(TD3);
+    let p = prepared(&d);
+    let good = inputs(&d);
+    let with_tree = |tree: &Tree| {
+        let mut i = good.clone();
+        let path = tree.path(1);
+        for (k, s) in path.siblings.iter().enumerate() {
+            set(&mut i, &format!("dsc_siblings[{k}]"), *s);
+        }
+        set(&mut i, "dsc_root", tree.root());
+        i
+    };
+    let utopia = enroll::dsc_leaf(&p.dsc_modulus, *b"UTO");
+    assert_eq!(utopia, p.enrollment.dsc_leaf);
+    assert!(solves(&with_tree(&dsc_tree(utopia))));
+    // The same key, listed for France: a UTO passport does not enroll.
+    let france = enroll::dsc_leaf(&p.dsc_modulus, *b"FRA");
+    assert!(!solves(&with_tree(&dsc_tree(france))));
+}
+
 #[test]
 fn the_data_groups_must_be_the_signed_ones() {
     let w = world();

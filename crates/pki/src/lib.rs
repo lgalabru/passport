@@ -24,7 +24,7 @@ pub mod sig;
 pub mod sod;
 
 pub use active::{ChipKey, verify_active_authentication};
-pub use passive::{PassiveAuth, Trust, passive_authentication};
+pub use passive::{Anchor, PassiveAuth, Trust, passive_authentication, trusted_signer};
 pub use sig::{Hash, SigAlg};
 pub use sod::Sod;
 
@@ -44,6 +44,10 @@ pub enum Error {
     UntrustedSigner,
     #[error("certificate not valid on this date: {0}")]
     NotValidNow(&'static str),
+    #[error("certificate used outside its role: {0}")]
+    WrongRole(&'static str),
+    #[error("the document's issuing state is not the one its CSCA signs for")]
+    WrongIssuingState,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

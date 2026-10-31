@@ -6,7 +6,9 @@
 //!    the LDSSecurityObject;
 //! 2. the LDSSecurityObject hashes to the `messageDigest` signed attribute;
 //! 3. a Document Signer signed the signed attributes (RSA-2048, PKCS#1 v1.5,
-//!    SHA-256), and its key is a leaf of the trusted DSC tree;
+//!    SHA-256), and its key is a leaf of the trusted DSC tree for the issuing
+//!    state in the MRZ: `dsc_leaf = Poseidon(Poseidon(n limbs), state)`, so
+//!    a signer trusted for one state cannot enroll another state's documents;
 //! 4. the chip signed, with the DG15 key (RSA-1024, ISO 9796-2, SHA-1), a
 //!    challenge derived from the commitment: a copy of the files cannot.
 //!
@@ -34,7 +36,7 @@
 
 use passport_gadget_lds::bytes;
 use passport_gadget_lds::prelude::*;
-use passport_gadget_poseidon::{hash, merkle_root};
+use passport_gadget_poseidon::{hash, hash2, merkle_root};
 use passport_gadget_rsa::{
     iso9796_2_s1_sha1_verify_1024, limbs12_to_bytes128, modulus, pkcs1v15_sha256_verify_2048,
 };
@@ -161,7 +163,10 @@ pub fn passport_enroll(
     // --- The Document Signer: signed the attributes, listed in the tree.
     let dsc = modulus::<24>(dsc_n);
     pkcs1v15_sha256_verify_2048(sod_sig, dsc, attrs_digest);
-    let dsc_leaf = hash(dsc_n);
+    // The issuing state, MRZ characters 3–5 on both layouts (bytes ranged
+    // by `pack30` above), as the claim circuit reveals it.
+    let state = mrz[2] * Field::from(65536u32) + mrz[3] * Field::from(256u16) + mrz[4];
+    let dsc_leaf = hash2(hash(dsc_n), state);
     require_eq(
         merkle_root::<DSC_DEPTH>(dsc_leaf, dsc_siblings, dsc_index_bits),
         dsc_root,

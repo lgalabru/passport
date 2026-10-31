@@ -16,11 +16,29 @@ use sha2::Sha256;
 
 use crate::der::{self, explicit, octets, seq, set, small, tlv, uint};
 use crate::oid;
-use crate::passive::Trust;
+use crate::passive::{Anchor, Trust};
 
 /// Validity of the test certificates, as UTCTime.
 pub const NOT_BEFORE: &str = "200101000000Z";
 pub const NOT_AFTER: &str = "391231235959Z";
+
+/// The issuing state of the test documents (ICAO's specimen state).
+pub const ISSUING_STATE: [u8; 3] = *b"UTO";
+
+/// What a test certificate is for, which sets its extensions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// `basicConstraints cA`, `keyUsage keyCertSign cRLSign`.
+    Csca,
+    /// `keyUsage digitalSignature`.
+    DocumentSigner,
+    /// `keyUsage digitalSignature`, `extKeyUsage` Master List signing.
+    MasterListSigner,
+    /// A CA certificate (`basicConstraints cA`, `keyCertSign`).
+    SubCa,
+    /// No extensions at all.
+    Bare,
+}
 
 /// A CSCA and the Document Signer it issued.
 pub struct TestPki {
@@ -51,8 +69,8 @@ impl TestPki {
             &csca_name,
             &csca_name,
             &spki(&csca_key),
-            NOT_BEFORE,
-            NOT_AFTER,
+            (NOT_BEFORE, NOT_AFTER),
+            Role::Csca,
         );
         let dsc_serial = vec![0x10, (seed & 0x7F) as u8];
         let dsc_cert = certificate(
@@ -61,8 +79,8 @@ impl TestPki {
             &csca_name,
             &dsc_name,
             &spki(&dsc_key),
-            not_before,
-            not_after,
+            (not_before, not_after),
+            Role::DocumentSigner,
         );
         Self {
             csca_key,
@@ -74,8 +92,35 @@ impl TestPki {
         }
     }
 
+    /// This CSCA, trusted for [`ISSUING_STATE`].
     pub fn trust(&self) -> Trust {
-        Trust::new(vec![self.csca_cert.clone()])
+        self.trust_for(ISSUING_STATE)
+    }
+
+    /// This CSCA, trusted for documents of `issuing_state`.
+    pub fn trust_for(&self, issuing_state: [u8; 3]) -> Trust {
+        Trust::new(vec![self.anchor_for(issuing_state)])
+    }
+
+    pub fn anchor_for(&self, issuing_state: [u8; 3]) -> Anchor {
+        Anchor {
+            csca: self.csca_cert.clone(),
+            issuing_state,
+        }
+    }
+
+    /// A certificate this CSCA issues for `key` in `role`.
+    pub fn issue(&self, key: &RsaPrivateKey, serial: &[u8], role: Role) -> Vec<u8> {
+        let subject = name("UT", "UT Test Certificate");
+        certificate(
+            &self.csca_key,
+            serial,
+            &self.csca_name,
+            &subject,
+            &spki(key),
+            (NOT_BEFORE, NOT_AFTER),
+            role,
+        )
     }
 
     /// EF.SOD over `groups` (`(number, file bytes)`), SHA-256 throughout,
@@ -86,6 +131,18 @@ impl TestPki {
 
     /// The same, signed with `key` (a wrong key makes a forged SOD).
     pub fn sign_sod_with(&self, groups: &[(u8, &[u8])], key: &RsaPrivateKey) -> Vec<u8> {
+        self.sign_sod_as(groups, key, &self.dsc_cert, &self.dsc_serial)
+    }
+
+    /// The same, signed with `key` and carrying `cert` (serial `serial`) as
+    /// the signer's certificate.
+    pub fn sign_sod_as(
+        &self,
+        groups: &[(u8, &[u8])],
+        key: &RsaPrivateKey,
+        cert: &[u8],
+        serial: &[u8],
+    ) -> Vec<u8> {
         let sha256 = seq(&[&oid::der(oid::SHA256)]);
         let hashes: Vec<Vec<u8>> = groups
             .iter()
@@ -113,7 +170,7 @@ impl TestPki {
 
         let signer = seq(&[
             &small(1),
-            &seq(&[&self.csca_name, &uint(&self.dsc_serial)]),
+            &seq(&[&self.csca_name, &uint(serial)]),
             &sha256,
             &implicit_attrs,
             &seq(&[&oid::der(oid::SHA256_WITH_RSA), &der::null()]),
@@ -126,7 +183,7 @@ impl TestPki {
                 &oid::der(oid::LDS_SECURITY_OBJECT),
                 &explicit(0, &octets(&lds)),
             ]),
-            &tlv(0xA0, &self.dsc_cert),
+            &tlv(0xA0, cert),
             &set(&[&signer]),
         ]);
         tlv(
@@ -205,27 +262,49 @@ fn name(country: &str, common_name: &str) -> Vec<u8> {
     ])
 }
 
+/// `[3] { Extensions }` for `role`, `None` for [`Role::Bare`].
+fn extensions(role: Role) -> Option<Vec<u8>> {
+    let ext = |id: &str, critical: bool, value: &[u8]| {
+        let critical = if critical { tlv(0x01, &[0xFF]) } else { vec![] };
+        seq(&[&oid::der(id), &critical, &octets(value)])
+    };
+    // keyUsage: digitalSignature (bit 0); keyCertSign, cRLSign (bits 5, 6).
+    let signer = ext(oid::KEY_USAGE, true, &tlv(0x03, &[0x07, 0x80]));
+    let ca_usage = ext(oid::KEY_USAGE, true, &tlv(0x03, &[0x01, 0x06]));
+    let ca = ext(oid::BASIC_CONSTRAINTS, true, &seq(&[&tlv(0x01, &[0xFF])]));
+    let list = ext(
+        oid::EXT_KEY_USAGE,
+        false,
+        &seq(&[&oid::der(oid::MASTER_LIST_SIGNER)]),
+    );
+    let all: Vec<&[u8]> = match role {
+        Role::Csca | Role::SubCa => vec![&ca, &ca_usage],
+        Role::DocumentSigner => vec![&signer],
+        Role::MasterListSigner => vec![&signer, &list],
+        Role::Bare => return None,
+    };
+    Some(explicit(3, &seq(&all)))
+}
+
 fn certificate(
     issuer_key: &RsaPrivateKey,
     serial: &[u8],
     issuer: &[u8],
     subject: &[u8],
     spki: &[u8],
-    not_before: &str,
-    not_after: &str,
+    (not_before, not_after): (&str, &str),
+    role: Role,
 ) -> Vec<u8> {
     let alg = seq(&[&oid::der(oid::SHA256_WITH_RSA), &der::null()]);
+    let validity = seq(&[
+        &tlv(0x17, not_before.as_bytes()),
+        &tlv(0x17, not_after.as_bytes()),
+    ]);
+    let version = explicit(0, &small(2));
+    let serial = uint(serial);
+    let ext = extensions(role).unwrap_or_default();
     let tbs = seq(&[
-        &explicit(0, &small(2)),
-        &uint(serial),
-        &alg,
-        issuer,
-        &seq(&[
-            &tlv(0x17, not_before.as_bytes()),
-            &tlv(0x17, not_after.as_bytes()),
-        ]),
-        subject,
-        spki,
+        &version, &serial, &alg, issuer, &validity, subject, spki, &ext,
     ]);
     let sig = issuer_key
         .sign(Pkcs1v15Sign::new::<Sha256>(), &sha2::Sha256::digest(&tbs))

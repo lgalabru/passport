@@ -58,6 +58,13 @@ pub const P384: &str = "1.3.132.0.34";
 pub const COUNTRY: &str = "2.5.4.6";
 pub const COMMON_NAME: &str = "2.5.4.3";
 
+pub const KEY_USAGE: &str = "2.5.29.15";
+pub const BASIC_CONSTRAINTS: &str = "2.5.29.19";
+pub const EXT_KEY_USAGE: &str = "2.5.29.37";
+/// ICAO 9303 part 12: the purposes a CSCA certifies besides Document Signers.
+pub const MASTER_LIST_SIGNER: &str = "2.23.136.1.1.3";
+pub const DEVIATION_LIST_SIGNER: &str = "2.23.136.1.1.8";
+
 #[cfg(test)]
 mod tests {
     #[test]
