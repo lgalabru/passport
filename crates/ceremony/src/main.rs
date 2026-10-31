@@ -9,6 +9,11 @@
 //! passport-ceremony export      <phase1.ptau> <circuit-dir> <params> <out-dir>
 //! ```
 //!
+//! Every command that reads `<phase1.ptau>` checks it, and accepts only a
+//! file whose SHA-256 it knows (the Perpetual Powers of Tau files it lists)
+//! or one given with `--ptau-sha256 <hex>`, after comparing that hash with
+//! the published one: a phase 1 whose `τ` someone knows passes every check.
+//!
 //! `<circuit-dir>` holds `circuit.xbc` and `r1cs.min.wcz` (`xark build`,
 //! then `xark setup --cache`, whose dev keys are discarded). A participant
 //! downloads the latest parameters, runs `contribute`, uploads the result
@@ -32,9 +37,13 @@ fn read(path: &str) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| format!("{path}: {e}"))
 }
 
-fn ptau(path: &str) -> Result<Ptau, String> {
-    let p = Ptau::read(&read(path)?).map_err(|e| e.to_string())?;
-    eprintln!("phase 1: domains up to 2^{}", p.power);
+/// Phase 1: pinned by hash, parsed, and checked.
+fn ptau(path: &str, accepted: Option<&str>) -> Result<Ptau, String> {
+    let bytes = read(path)?;
+    let what = passport_ceremony::ptau::pinned(&bytes, accepted).map_err(|e| e.to_string())?;
+    let p = Ptau::read(&bytes).map_err(|e| e.to_string())?;
+    eprintln!("phase 1: {what}, domains up to 2^{}", p.power);
+    p.verify().map_err(|e| e.to_string())?;
     Ok(p)
 }
 
@@ -60,8 +69,14 @@ fn write(path: &str, p: &Params) -> Result<(), String> {
     std::fs::write(path, p.write()).map_err(|e| format!("{path}: {e}"))
 }
 
-fn verified(ptau_path: &str, dir: &str, params_path: &str) -> Result<Params, String> {
-    let initial = Params::initial(&ptau(ptau_path)?, &shape(dir)?).map_err(|e| e.to_string())?;
+fn verified(
+    ptau_path: &str,
+    accepted: Option<&str>,
+    dir: &str,
+    params_path: &str,
+) -> Result<Params, String> {
+    let initial =
+        Params::initial(&ptau(ptau_path, accepted)?, &shape(dir)?).map_err(|e| e.to_string())?;
     let p = params(params_path)?;
     let transcripts = p.verify(&initial).map_err(|e| e.to_string())?;
     for (i, t) in transcripts.iter().enumerate() {
@@ -71,14 +86,20 @@ fn verified(ptau_path: &str, dir: &str, params_path: &str) -> Result<Params, Str
 }
 
 fn run(args: &[String]) -> Result<(), String> {
-    let a: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut a: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut accepted = None;
+    if let Some(i) = a.iter().position(|x| *x == "--ptau-sha256") {
+        accepted = Some(*a.get(i + 1).ok_or("--ptau-sha256 takes a hash")?);
+        a.drain(i..i + 2);
+    }
     match a.as_slice() {
         ["verify-ptau", file] => {
-            ptau(file)?.verify().map_err(|e| e.to_string())?;
+            ptau(file, accepted)?;
             println!("phase 1 is consistent");
         }
         ["init", ptau_path, dir, out] => {
-            let p = Params::initial(&ptau(ptau_path)?, &shape(dir)?).map_err(|e| e.to_string())?;
+            let p = Params::initial(&ptau(ptau_path, accepted)?, &shape(dir)?)
+                .map_err(|e| e.to_string())?;
             write(out, &p)?;
             println!("initial parameters: {}", hex(&p.transcript()));
         }
@@ -112,11 +133,11 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("beacon contribution: {}", hex(&t));
         }
         ["verify", ptau_path, dir, params_path] => {
-            verified(ptau_path, dir, params_path)?;
+            verified(ptau_path, accepted, dir, params_path)?;
             println!("the parameters are valid");
         }
         ["export", ptau_path, dir, params_path, out] => {
-            let p = verified(ptau_path, dir, params_path)?;
+            let p = verified(ptau_path, accepted, dir, params_path)?;
             p.write_keys(Path::new(out)).map_err(|e| e.to_string())?;
             println!("wrote {out}/pk.bin and {out}/vk.bin");
         }

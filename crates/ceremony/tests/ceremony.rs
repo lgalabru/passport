@@ -87,6 +87,39 @@ fn a_corrupted_phase_1_is_caught() {
     assert!(Ptau::read(b"ptax").is_err());
 }
 
+/// A phase 1 made from secrets someone knows is consistent, so the checks
+/// cannot catch it: only a file whose hash matches a published one is used.
+#[test]
+fn phase_1_is_pinned_by_its_hash() {
+    use passport_ceremony::ptau::{pinned, sha256_hex};
+    assert!(
+        pinned(PPOT_08, None)
+            .unwrap()
+            .contains("Perpetual Powers of Tau")
+    );
+    let ours = synthetic(4).write();
+    synthetic(4).verify().unwrap();
+    let refused = pinned(&ours, None).unwrap_err().to_string();
+    assert!(refused.contains(&sha256_hex(&ours)), "{refused}");
+    assert!(pinned(&ours, Some(&sha256_hex(PPOT_08))).is_err());
+    pinned(&ours, Some(&sha256_hex(&ours).to_uppercase())).unwrap();
+}
+
+/// τ = 0 puts every higher power at infinity and τ = 1 makes them all the
+/// generator: each pairing check then holds trivially.
+#[test]
+fn a_degenerate_phase_1_is_refused() {
+    for (tau, alpha, beta) in [
+        (0, ALPHA, BETA),
+        (1, ALPHA, BETA),
+        (TAU, 0, BETA),
+        (TAU, ALPHA, 0),
+    ] {
+        let p = Ptau::insecure_from_secrets(4, Fr::from(tau), Fr::from(alpha), Fr::from(beta));
+        assert!(p.verify().is_err(), "τ={tau} α={alpha} β={beta}");
+    }
+}
+
 #[test]
 fn a_synthetic_phase_1_verifies() {
     synthetic(4).verify().unwrap();

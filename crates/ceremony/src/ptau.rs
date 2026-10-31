@@ -55,6 +55,44 @@ pub fn lagrange<T>(section: &[T], k: u32) -> &[T] {
     &section[start..start + (1 << k)]
 }
 
+/// Phase 1 files this tool knows by SHA-256, with where they come from.
+///
+/// [`Ptau::verify`] shows a file is consistent, not that nobody knows its
+/// `τ`: a file made from known secrets passes every check, and then no
+/// phase 2 contribution helps. A ceremony must start from a public file
+/// that everyone compares with its published hash.
+pub const KNOWN: &[(&str, &str)] = &[(
+    "5c411c13838e8e3ff80b6f87b81a0a92a66d2e64e82dd6af88ffc8ea89a548f6",
+    "Perpetual Powers of Tau (PSE), response 0080, power 8: ppot_0080_08.ptau",
+)];
+
+/// The SHA-256 of `bytes`, hex.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// Accept `bytes` as phase 1 if their hash is in [`KNOWN`] or is `accepted`
+/// (one the operator checked against the published hash). Returns what the
+/// file is.
+pub fn pinned(bytes: &[u8], accepted: Option<&str>) -> Result<String> {
+    let hash = sha256_hex(bytes);
+    if let Some((_, name)) = KNOWN.iter().find(|(h, _)| *h == hash) {
+        return Ok((*name).to_string());
+    }
+    if accepted.is_some_and(|a| a.eq_ignore_ascii_case(&hash)) {
+        return Ok(format!(
+            "phase 1 with SHA-256 {hash}, accepted by the operator"
+        ));
+    }
+    Err(Error::Ptau(format!(
+        "unknown phase 1 file (SHA-256 {hash}); compare it with the published hash, then pass --ptau-sha256 {hash}"
+    )))
+}
+
 fn malformed(what: &str) -> Error {
     Error::Ptau(what.into())
 }
@@ -279,6 +317,14 @@ impl Ptau {
         let g2 = G2Affine::generator();
         if self.tau_g1[0] != g1 || self.tau_g2[0] != g2 {
             return Err(malformed("powers do not start at the generators"));
+        }
+        // τ = 0 or 1, α = 0 or β = 0 make every check below trivial.
+        let zero1 = G1Affine::identity();
+        if self.tau_g1[1] == zero1 || self.tau_g1[1] == g1 {
+            return Err(malformed("τ is 0 or 1"));
+        }
+        if self.alpha_tau_g1[0] == zero1 || self.beta_tau_g1[0] == zero1 {
+            return Err(malformed("α or β is 0"));
         }
         let tau = self.tau_g2[1];
         let mut rng = ChaCha20Rng::from_rng(rand::thread_rng()).expect("rng");
