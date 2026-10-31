@@ -31,13 +31,14 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       # Crates whose tests build circuits need the xark compiler and the
-      # passport_claim artifacts; they run in the `circuits` job.
+      # passport_claim artifacts; they run in the `circuits` job. The surfpool
+      # tests are all ignored (`just e2e`) and linking surfpool fills the disk.
       - name: Tests
         run: >
           cargo test --workspace
           --exclude passport_aa --exclude passport_dsc_sig --exclude passport_sha1
           --exclude passport_rsa2048 --exclude passport_enroll
-          --exclude passport-attest --exclude passport-ffi
+          --exclude passport-attest --exclude passport-ffi --exclude passport-e2e
       # The document vocabulary and the eMRTD driver run on a Flipper Zero.
       - name: no_std builds
         run: |
