@@ -21,8 +21,10 @@ struct VerificationRequest: Equatable, Identifiable {
     /// The request as the core serialised it; handed back to prove.
     var json: String
 
-    /// What to call the relying party on screen.
-    var displayName: String { clientName ?? recipient }
+    /// What to call the relying party on screen: the host that receives the
+    /// proof. `clientName` and `logoUri` are whatever the request says, so
+    /// they never stand in for it.
+    var displayName: String { recipient }
 
     static func == (a: Self, b: Self) -> Bool { a.json == b.json }
 }

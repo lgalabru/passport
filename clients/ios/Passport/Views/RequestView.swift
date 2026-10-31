@@ -88,15 +88,22 @@ private struct Review: View {
 
     private var header: some View {
         VStack(spacing: 10) {
-            VerifierBadge(name: request.displayName, logo: request.logoUri.flatMap(URL.init(string:)), size: 64)
+            VerifierBadge(name: request.displayName, size: 64)
             Text(request.displayName)
                 .font(.title2.bold())
                 .multilineTextAlignment(.center)
+            if let name = request.clientName, name != request.displayName {
+                Text("Calls itself “\(name)”")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             Text(request.purpose ?? "wants you to verify")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Label(request.recipient, systemImage: request.responseUri.hasPrefix("https://") ? "lock.fill" : "exclamationmark.triangle")
+            Label(request.responseUri.hasPrefix("https://") ? "Sent over HTTPS" : "Not sent over HTTPS",
+                  systemImage: request.responseUri.hasPrefix("https://") ? "lock.fill" : "exclamationmark.triangle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .labelStyle(.titleAndIcon)

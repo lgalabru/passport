@@ -8,8 +8,15 @@
 //! claim proof. `aud` is the `client_id` and `cnf.kid` carries the `nonce`, so a
 //! proof answers one request from one relying party only.
 //!
-//! Not yet supported: signed request objects are decoded but their signature
-//! is not checked, `direct_post.jwt` (encrypted responses), and transaction data.
+//! Only `redirect_uri:` client ids are accepted, and the response URI must be
+//! the client id: the proof's audience is then where it is posted, so a site
+//! cannot ask for a proof meant for another relying party and keep it. Other
+//! schemes (`x509_san_dns:`, `decentralized_identifier:`, …) name a verifier
+//! that only a signed request object can authenticate, and request signatures
+//! are not checked yet.
+//!
+//! Not yet supported: request signatures, `direct_post.jwt` (encrypted
+//! responses), and transaction data.
 
 use serde_json::{Value, json};
 
@@ -29,7 +36,8 @@ pub struct AuthorizationRequest {
     /// The DCQL credential query id the proof answers.
     pub credential_id: String,
     pub claims: Vec<Claim>,
-    /// `client_metadata.client_name`, for the consent screen.
+    /// `client_metadata.client_name`: self-declared, so the consent screen
+    /// names the relying party by [`AuthorizationRequest::recipient`].
     pub client_name: Option<String>,
     pub logo_uri: Option<String>,
     /// Why the relying party asks, if it said (`purpose` in older drafts).
@@ -64,6 +72,21 @@ pub enum Link {
         client_id: String,
         post: bool,
     },
+}
+
+/// The only client id scheme an unsigned request can use.
+const REDIRECT_URI: &str = "redirect_uri:";
+
+fn check_scheme(client_id: &str) -> Result<()> {
+    if client_id.starts_with(REDIRECT_URI) {
+        return Ok(());
+    }
+    let scheme = client_id
+        .split_once(':')
+        .map_or("a bare client id", |(s, _)| s);
+    Err(Error::Unsupported(format!(
+        "{scheme}: only redirect_uri client ids until request signatures are checked"
+    )))
 }
 
 fn host(url: &str) -> Option<String> {
@@ -131,6 +154,8 @@ pub fn parse_link(url: &str) -> Result<Link> {
     if let Some(request_uri) = get("request_uri") {
         let client_id =
             get("client_id").ok_or_else(|| Error::Request("client_id is missing".into()))?;
+        // Refused before anything is fetched.
+        check_scheme(&client_id)?;
         let post = get("request_uri_method").as_deref() == Some("post");
         return Ok(Link::Fetch {
             request_uri,
@@ -182,6 +207,7 @@ fn from_object(o: &Value, link_client_id: Option<&str>) -> Result<AuthorizationR
     let need = |name: &str| text(name).ok_or_else(|| Error::Request(format!("{name} is missing")));
 
     let client_id = need("client_id")?;
+    check_scheme(&client_id)?;
     if link_client_id.is_some_and(|c| c != client_id) {
         return Err(Error::Request(
             "client_id differs between link and request object".into(),
@@ -204,9 +230,7 @@ fn from_object(o: &Value, link_client_id: Option<&str>) -> Result<AuthorizationR
         return Err(Error::Request("response_uri must be https".into()));
     }
     // OpenID4VP: with a redirect_uri client id, it must be the response URI.
-    if let Some(uri) = client_id.strip_prefix("redirect_uri:")
-        && uri != response_uri
-    {
+    if client_id.strip_prefix(REDIRECT_URI) != Some(response_uri.as_str()) {
         return Err(Error::Request(
             "client_id does not match response_uri".into(),
         ));

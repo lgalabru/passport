@@ -242,6 +242,76 @@ fn every_field_the_proof_covers_is_bound() {
     assert!(proof_rejects(&spliced, &expect(&req)));
 }
 
+/// A token carries nothing the proof does not account for, in one encoding:
+/// fields a JOSE library would act on, alternative spellings of a claim, and
+/// JSON that two parsers read differently are all refused before the proof.
+#[test]
+fn tokens_are_canonical() {
+    let (token, req) = prove(TD3, vec![Claim::AgeOver(18), Claim::Birthdate]);
+    let expect = expect(&req);
+    assert_eq!(outcome(&token, &expect), "accepted");
+    let parts: Vec<&str> = token.split('.').collect();
+    let raw = |payload: &str| format!("{}.{}.{}", parts[0], B64.encode(payload), parts[2]);
+    let refused = |t: &str, what: &str| {
+        let o = outcome(t, &expect);
+        assert!(
+            o.contains("not canonical") || o.contains("unexpected"),
+            "{what}: {o}"
+        );
+    };
+
+    // Members the proof does not cover, at every level.
+    refused(
+        &with_payload(&token, |p| p["cnf"]["jwk"] = json!({"kty": "EC"})),
+        "cnf.jwk",
+    );
+    refused(
+        &with_payload(&token, |p| p["zk"]["evil"] = json!(1)),
+        "zk.evil",
+    );
+    refused(
+        &with_payload(&token, |p| p["verified_claims"]["foo"] = json!(1)),
+        "verified_claims.foo",
+    );
+    let mut header: Value = serde_json::from_slice(&B64.decode(parts[0]).unwrap()).unwrap();
+    header["jku"] = json!("https://evil.example/keys");
+    refused(
+        &format!(
+            "{}.{}.{}",
+            B64.encode(header.to_string()),
+            parts[1],
+            parts[2]
+        ),
+        "header jku",
+    );
+
+    // Other spellings of the same claims.
+    refused(
+        &with_payload(&token, |p| {
+            p["verified_claims"]["claims"]["birthdate"] = json!("19740812xx")
+        }),
+        "birthdate",
+    );
+    refused(
+        &with_payload(&token, |p| {
+            p["verified_claims"]["claims"]["age_equal_or_over"] = json!({ "018": true })
+        }),
+        "age 018",
+    );
+
+    // Bytes another parser reads differently, or just differently laid out.
+    let text = String::from_utf8(B64.decode(parts[1]).unwrap()).unwrap();
+    let aud = format!("\"aud\":{}", json!(req.audience));
+    assert!(text.contains(&aud));
+    refused(
+        &raw(&text.replacen(&aud, &format!("\"aud\":\"other.example\",{aud}"), 1)),
+        "duplicate aud",
+    );
+    refused(&raw(&text.replacen(',', ", ", 1)), "whitespace");
+    let pretty = serde_json::to_string_pretty(&payload(&token)).unwrap();
+    refused(&raw(&pretty), "pretty-printed");
+}
+
 #[test]
 fn verifiers_check_audience_holder_and_issuer() {
     let (token, req) = prove(TD3, vec![Claim::AgeOver(18)]);
@@ -508,20 +578,82 @@ fn openid4vp_round_trip() {
     assert!(verify_token(&token, prover().verifying_key(), &expect).is_ok());
 
     // A request_uri link defers to the fetched object, which must agree.
-    let fetch = oid4vp::parse_link("openid4vp://?client_id=x509_san_dns%3Abar.example&request_uri=https%3A%2F%2Fbar.example%2Freq%2F1").unwrap();
+    let rp = "redirect_uri:https://bar.example/post";
+    let fetch = oid4vp::parse_link(&format!(
+        "openid4vp://?client_id={}&request_uri=https%3A%2F%2Fbar.example%2Freq%2F1",
+        oid4vp::encode_component(rp)
+    ))
+    .unwrap();
     assert!(matches!(fetch, oid4vp::Link::Fetch { post: false, .. }));
-    let object = json!({
-        "client_id": "x509_san_dns:bar.example", "response_type": "vp_token",
-        "response_mode": "direct_post", "response_uri": "https://bar.example/post",
-        "nonce": "abcdefgh12", "dcql_query": dcql,
-    });
-    let jwt = format!(
-        "eyJhbGciOiJFUzI1NiJ9.{}.sig",
-        B64.encode(object.to_string())
-    );
-    let parsed = oid4vp::parse_request_object(&jwt, Some("x509_san_dns:bar.example")).unwrap();
+    let object = |client_id: &str, response_uri: &str| {
+        let o = json!({
+            "client_id": client_id, "response_type": "vp_token",
+            "response_mode": "direct_post", "response_uri": response_uri,
+            "nonce": "abcdefgh12", "dcql_query": dcql,
+        });
+        format!("eyJhbGciOiJub25lIn0.{}.", B64.encode(o.to_string()))
+    };
+    let jwt = object(rp, "https://bar.example/post");
+    let parsed = oid4vp::parse_request_object(&jwt, Some(rp)).unwrap();
     assert_eq!(parsed.credential_id, "over18");
-    assert!(oid4vp::parse_request_object(&jwt, Some("x509_san_dns:evil.example")).is_err());
+    assert!(
+        oid4vp::parse_request_object(&jwt, Some("redirect_uri:https://evil.example/")).is_err()
+    );
+}
+
+/// A phishing site asks for a proof for bar.example but has it posted to
+/// itself, to replay it at bar.example. The audience must be where the
+/// proof goes, and a client id the wallet cannot authenticate is refused.
+#[test]
+fn requests_cannot_send_a_proof_for_one_relying_party_to_another() {
+    let dcql = json!({ "credentials": [{
+        "id": "q", "format": "passport-claim+zk",
+        "claims": [{ "path": ["age_equal_or_over", "18"] }],
+    }]});
+    let link = |client_id: &str, response_uri: &str| {
+        format!(
+            "openid4vp://?client_id={}&response_uri={}&nonce=n-0S6_WzA2Mj&dcql_query={}&client_metadata={}",
+            oid4vp::encode_component(client_id),
+            oid4vp::encode_component(response_uri),
+            oid4vp::encode_component(&dcql.to_string()),
+            oid4vp::encode_component(r#"{"client_name":"Bar Bank"}"#),
+        )
+    };
+    let refused = |client_id: &str, response_uri: &str| {
+        oid4vp::parse_link(&link(client_id, response_uri)).expect_err(client_id)
+    };
+    // Unsigned, so unauthenticated: the verifier it names is a claim.
+    for client_id in [
+        "x509_san_dns:bar.example",
+        "decentralized_identifier:did:web:bar.example",
+        "bar.example",
+    ] {
+        refused(client_id, "https://evil.example/cb");
+        refused(client_id, "https://bar.example/cb");
+    }
+    refused(
+        "redirect_uri:https://bar.example/cb",
+        "https://evil.example/cb",
+    );
+    let fetch = format!(
+        "openid4vp://?client_id={}&request_uri=https%3A%2F%2Fevil.example%2Freq",
+        oid4vp::encode_component("x509_san_dns:bar.example")
+    );
+    assert!(
+        oid4vp::parse_link(&fetch).is_err(),
+        "refused before fetching"
+    );
+
+    // The audience is the response URI, whatever the request calls itself.
+    let oid4vp::Link::Inline(ok) = oid4vp::parse_link(&link(
+        "redirect_uri:https://bar.example/cb",
+        "https://bar.example/cb",
+    ))
+    .unwrap() else {
+        panic!("inline")
+    };
+    assert_eq!(ok.audience(), "redirect_uri:https://bar.example/cb");
+    assert_eq!(ok.recipient(), "bar.example");
 }
 
 #[test]

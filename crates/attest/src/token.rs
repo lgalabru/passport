@@ -4,6 +4,12 @@
 //! The verifier never trusts the payload: it recomputes the circuit's public
 //! inputs from it (§3.1) and checks the proof against them, so every claim in
 //! the payload is one the proof establishes.
+//!
+//! The header and payload are canonical: compact JSON, keys sorted, exactly
+//! the members [`issue`] writes. A verifier rebuilds both from what it parsed
+//! and requires the same bytes, so a token cannot carry anything the proof
+//! does not account for (an extra `cnf.jwk`, a header `jku`, a duplicate
+//! `aud` that another JSON parser would read differently, `"018"` for an age).
 
 use ark_bn254::{Bn254, Fr};
 use ark_ff::{BigInteger, PrimeField};
@@ -218,25 +224,56 @@ pub fn issue<R: RngCore + CryptoRng>(
         public, expected,
         "public input order drifted from the circuit"
     );
-    let header = json!({ "typ": TYP, "alg": ALG, "kid": key_id(prover.verifying_key()) });
-    let payload = json!({
-        "iss": request.issuer,
-        "sub": field_b64(public[2]),
-        "aud": request.audience,
-        "cnf": { "kid": request.holder },
-        "iat": request.issued_at,
-        "verified_claims": {
-            "verification": verification(&request.issuer),
-            "claims": render(&statement),
-        },
-        "zk": { "root": field_b64(public[0]) },
-    });
+    let payload = Payload {
+        iss: &request.issuer,
+        sub: public[2],
+        aud: &request.audience,
+        holder: &request.holder,
+        iat: request.issued_at,
+        root: public[0],
+        statement: &statement,
+    };
     Ok(format!(
         "{}.{}.{}",
-        B64.encode(header.to_string()),
-        B64.encode(payload.to_string()),
+        B64.encode(header(&key_id(prover.verifying_key()))),
+        B64.encode(payload.encode()),
         B64.encode(encode_proof(&proof))
     ))
+}
+
+/// The canonical header.
+fn header(kid: &str) -> String {
+    json!({ "typ": TYP, "alg": ALG, "kid": kid }).to_string()
+}
+
+/// Everything a payload says; [`Payload::encode`] is its one encoding.
+struct Payload<'a> {
+    iss: &'a str,
+    sub: Fr,
+    aud: &'a str,
+    holder: &'a str,
+    iat: i64,
+    root: Fr,
+    statement: &'a Statement,
+}
+
+impl Payload<'_> {
+    /// Compact, keys sorted (`serde_json::Map` is a `BTreeMap`).
+    fn encode(&self) -> String {
+        json!({
+            "iss": self.iss,
+            "sub": field_b64(self.sub),
+            "aud": self.aud,
+            "cnf": { "kid": self.holder },
+            "iat": self.iat,
+            "verified_claims": {
+                "verification": verification(self.iss),
+                "claims": render(self.statement),
+            },
+            "zk": { "root": field_b64(self.root) },
+        })
+        .to_string()
+    }
 }
 
 /// How old an `iat` a verifier accepts, in seconds. The proof binds only the
@@ -302,17 +339,22 @@ pub fn verify_token(
     if parts.len() != 3 {
         return Err(Error::Payload("a claim proof has three parts".into()));
     }
-    let header: Value = serde_json::from_slice(&part(&parts, 0)?)
+    let header_bytes = part(&parts, 0)?;
+    let parsed_header: Value = serde_json::from_slice(&header_bytes)
         .map_err(|_| Error::Payload("header is not JSON".into()))?;
-    if header["typ"] != TYP || header["alg"] != ALG {
+    if parsed_header["typ"] != TYP || parsed_header["alg"] != ALG {
         return Err(Error::Payload("not a passport claim proof".into()));
     }
-    if header["kid"] != key_id(vk) {
+    if parsed_header["kid"] != key_id(vk) {
         return Err(Error::Payload(
             "proof made for another verifying key".into(),
         ));
     }
-    let payload: Value = serde_json::from_slice(&part(&parts, 1)?)
+    if header_bytes != header(&key_id(vk)).as_bytes() {
+        return Err(Error::Payload("header is not canonical".into()));
+    }
+    let payload_bytes = part(&parts, 1)?;
+    let payload: Value = serde_json::from_slice(&payload_bytes)
         .map_err(|_| Error::Payload("payload is not JSON".into()))?;
     let proof = decode_proof(&part(&parts, 2)?)?;
 
@@ -340,6 +382,19 @@ pub fn verify_token(
         return Err(Error::Payload("unexpected verification block".into()));
     }
     let statement = parse_rendered(&payload["verified_claims"]["claims"])?;
+    // Nothing the proof does not account for, in one encoding only.
+    let canonical = Payload {
+        iss: &iss,
+        sub: nullifier,
+        aud: &aud,
+        holder: &holder,
+        iat,
+        root,
+        statement: &statement,
+    };
+    if payload_bytes != canonical.encode().as_bytes() {
+        return Err(Error::Payload("payload is not canonical".into()));
+    }
 
     if iss != expect.issuer {
         return Err(Error::Rejected("proof is from another issuer".into()));
