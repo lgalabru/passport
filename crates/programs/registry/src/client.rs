@@ -13,6 +13,12 @@ pub fn nullifier_address(program_id: &Address, nullifier: &[u8; 32]) -> Address 
     Address::find_program_address(&[NULLIFIER_SEED, nullifier], program_id).0
 }
 
+/// The program's ProgramData account, which records its upgrade authority:
+/// the one key that can sign `INITIALIZE`.
+pub fn program_data_address(program_id: &Address) -> Address {
+    Address::find_program_address(&[program_id.as_ref()], &crate::BPF_LOADER_UPGRADEABLE).0
+}
+
 pub fn initialize_data(authority: &[u8; 32]) -> Vec<u8> {
     [&[ix::INITIALIZE][..], authority].concat()
 }

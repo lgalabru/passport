@@ -85,6 +85,40 @@ fn send(client: &RpcClient, payer: &Keypair, ix: Instruction) -> Result<String, 
         .map_err(|e| e.to_string())
 }
 
+fn transfer(from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
+    let mut data = vec![2, 0, 0, 0];
+    data.extend_from_slice(&lamports.to_le_bytes());
+    Instruction::new_with_bytes(
+        SYSTEM_PROGRAM,
+        &data,
+        vec![AccountMeta::new(*from, true), AccountMeta::new(*to, false)],
+    )
+}
+
+fn wait_for_balance(client: &RpcClient, key: &Pubkey) {
+    for _ in 0..50 {
+        if client.get_balance(key).unwrap_or(0) > 0 {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    panic!("airdrop did not land");
+}
+
+/// `surfnet_setProgramAuthority`: the surfnet deploys with the System
+/// Program as upgrade authority.
+fn set_upgrade_authority(client: &RpcClient, program: &Pubkey, authority: &Pubkey) {
+    use solana_rpc_client_api::request::RpcRequest;
+    client
+        .send::<serde_json::Value>(
+            RpcRequest::Custom {
+                method: "surfnet_setProgramAuthority",
+            },
+            serde_json::json!([program.to_string(), authority.to_string()]),
+        )
+        .expect("set the upgrade authority");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs cargo-build-sbf and `just enroll-artifacts`; run with `just e2e`"]
 async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
@@ -107,22 +141,41 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
         .expect("deploy the registry");
     let program = passport_registry::client::Address::new_from_array(program_id.to_bytes());
     let registry = addr(client::registry_address(&program));
+    let program_data = addr(client::program_data_address(&program));
+    set_upgrade_authority(&client, &program_id, &payer.pubkey());
 
-    // The publisher initializes the registry and trusts the fixture DSC.
+    // Lamports sent to a PDA before it exists (at least the rent-exempt
+    // minimum, or the transfer fails) must not block its creation.
+    let griefer = Keypair::new();
+    client
+        .request_airdrop(&griefer.pubkey(), 1_000_000_000)
+        .unwrap();
+    wait_for_balance(&client, &griefer.pubkey());
     send(
         &client,
-        payer,
+        &griefer,
+        transfer(&griefer.pubkey(), &registry, 1_000_000),
+    )
+    .expect("fund the PDA");
+
+    let initialize = |signer: &Keypair| {
         Instruction::new_with_bytes(
             program_id,
             &client::initialize_data(&payer.pubkey().to_bytes()),
             vec![
-                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new(signer.pubkey(), true),
                 AccountMeta::new(registry, false),
                 AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+                AccountMeta::new_readonly(program_data, false),
+                AccountMeta::new_readonly(signer.pubkey(), true),
             ],
-        ),
-    )
-    .expect("initialize");
+        )
+    };
+    // Only the upgrade authority names the registry's authority.
+    send(&client, &griefer, initialize(&griefer)).expect_err("a stranger initializes");
+    // The publisher initializes the registry and trusts the fixture DSC.
+    send(&client, payer, initialize(payer)).expect("initialize");
+    send(&client, payer, initialize(payer)).expect_err("initialized twice");
 
     let pki = TestPki::generate(41, "UT");
     let chip = TestChip::generate(41);
@@ -175,6 +228,16 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
     bent[70] ^= 1;
     send(&client, payer, enroll_ix(&bent, be(public.dsc_root))).expect_err("tampered proof");
     send(&client, payer, enroll_ix(&wire, [9; 32])).expect_err("untrusted DSC root");
+
+    // Anyone who read the chip can compute the nullifier; funding its PDA
+    // first must not lock the document out.
+    let nullifier_pda = addr(client::nullifier_address(&program, &nullifier));
+    send(
+        &client,
+        &griefer,
+        transfer(&griefer.pubkey(), &nullifier_pda, 1_000_000),
+    )
+    .expect("fund the nullifier PDA");
 
     let sig = send(&client, payer, enroll_ix(&wire, be(public.dsc_root))).expect("enroll");
     // Once per document.

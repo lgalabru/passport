@@ -27,4 +27,7 @@ solana-signature = "3"
 solana-commitment-config = "3"
 solana-compute-budget-interface = "3"
 solana-transaction-status-client-types = "4"
+# Custom surfnet cheatcodes over RPC (setting the program upgrade authority).
+solana-rpc-client-api = "4"
+serde_json = { workspace = true }
 tokio = { workspace = true }
