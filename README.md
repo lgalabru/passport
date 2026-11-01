@@ -39,7 +39,7 @@ where other programs can condition on it.
 | 🔏 **Verify** | Passive Authentication (data group hashes, SOD signature, DSC chain to a CSCA) and Active Authentication, natively. | Works: [`crates/pki`](crates/pki) |
 | 🧮 **Claim** | `passport_claim`: age, nationality, issuer, expiry and birth date over the MRZ, plus registry membership. Proves in about 0.2 s on an iPhone. Verifiers pin the issuer, the claims, fresh `iat` and trusted roots. | Works, with dev keys; the app still enrolls locally |
 | 📲 **Present** | The iOS app answers [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html) requests with a compact, JWT-shaped claim proof. | Works |
-| 🪪 **Enroll** | `passport_enroll`: proves the SOD, the DSC chain, the DG15 binding and AA in zero knowledge, so the registry only admits documents a state issued. 1.1M constraints, about 9 s on a Mac. | Works, with dev keys |
+| 🪪 **Enroll** | `passport_enroll`: proves the SOD, the DSC chain, the DG15 binding and AA in zero knowledge, so the registry only admits documents a state issued. 1.1M constraints, about 5.5 s and 1.8 GB on a Mac. | Works, with dev keys |
 | ⛓️ **Attest** | The registry program (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree), and a verifier program that issues SAS attestations. | The registry runs in surfpool; SAS is next |
 | 🕯️ **Setup** | `passport-ceremony`: a multi-party Groth16 setup on the Perpetual Powers of Tau, with verifiable contributions. | The tool works; the ceremony is to run |
 | 🤖 **Agents** | `passport` CLI and MCP server with `prove`, `verify` and `attest`. | `setup` and `scan` today |

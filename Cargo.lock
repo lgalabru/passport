@@ -5260,6 +5260,7 @@ dependencies = [
  "light-poseidon 0.4.1",
  "passport-driver-emrtd",
  "passport-pki",
+ "passport-prover",
  "rand 0.8.8",
  "serde_json",
  "sha2 0.10.9",
@@ -5433,6 +5434,28 @@ dependencies = [
  "sha1 0.10.7",
  "sha2 0.10.9",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "passport-prover"
+version = "0.1.0"
+dependencies = [
+ "ark-bn254 0.6.0",
+ "ark-ec 0.6.0",
+ "ark-ff 0.6.0",
+ "ark-groth16",
+ "ark-poly 0.6.0",
+ "ark-relations",
+ "ark-snark",
+ "ark-std 0.6.0",
+ "passport-attest",
+ "rand 0.8.8",
+ "rayon",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "xark-backend",
+ "xark-ir",
+ "xark-prover",
 ]
 
 [[package]]

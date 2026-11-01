@@ -127,7 +127,7 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
     let dir = root.join("crates/circuits/enroll/target/xark/passport_enroll");
     let prover = Prover::load(
         &std::fs::read(dir.join("circuit.xbc")).expect("run `just enroll-artifacts`"),
-        &std::fs::read(dir.join("r1cs.min.wcz")).unwrap(),
+        &std::fs::read(dir.join("matrices.bin")).unwrap(),
         &dir.join("pk.bin"),
     )
     .unwrap();
@@ -271,7 +271,7 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
         let d = root.join("crates/circuits/claim/target/xark/passport_claim");
         Prover::load(
             &std::fs::read(d.join("circuit.xbc")).expect("run `just claim-artifacts`"),
-            &std::fs::read(d.join("r1cs.min.wcz")).unwrap(),
+            &std::fs::read(d.join("matrices.bin")).unwrap(),
             &d.join("pk.bin"),
         )
         .unwrap()

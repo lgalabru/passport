@@ -14,8 +14,8 @@ fn main() {
         .join("../circuits/claim/target/xark/passport_claim");
     let t = Instant::now();
     let xbc = std::fs::read(dir.join("circuit.xbc")).unwrap();
-    let cache = std::fs::read(dir.join("r1cs.min.wcz")).unwrap();
-    let prover = Prover::load(&xbc, &cache, &dir.join("pk.bin")).unwrap();
+    let matrices = std::fs::read(dir.join("matrices.bin")).unwrap();
+    let prover = Prover::load(&xbc, &matrices, &dir.join("pk.bin")).unwrap();
     println!("load: {:?}", t.elapsed());
     let e = Enrollment {
         secret: Fr::from(42u8),

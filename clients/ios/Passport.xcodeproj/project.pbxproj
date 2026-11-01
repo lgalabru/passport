@@ -186,7 +186,7 @@
 			);
 			inputPaths = (
 				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/circuit.xbc",
-				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/r1cs.min.wcz",
+				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/matrices.bin",
 				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/pk.bin",
 				"$(PROJECT_DIR)/../../crates/circuits/claim/target/xark/passport_claim/vk.bin",
 			);
@@ -195,7 +195,7 @@
 			);
 			outputPaths = (
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Circuit/circuit.xbc",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Circuit/r1cs.min.wcz",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Circuit/matrices.bin",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Circuit/pk.bin",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Circuit/vk.bin",
 			);

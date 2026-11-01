@@ -1,0 +1,343 @@
+//! The constraint matrices a prover needs, built once from xark's minimized
+//! R1CS, stored compactly.
+//!
+//! File layout (`matrices.bin`), little-endian:
+//!
+//! ```text
+//! "PPMX" ‖ version u32 = 1 ‖ SHA-256(circuit.xbc) (32)
+//! num_constraints u64 ‖ instance u64 ‖ witness u64 ‖ coeffs u64
+//! instance ids u32[instance] ‖ witness ids u32[witness]
+//! coeffs: 32-byte canonical field elements
+//! A: nnz u64 ‖ start u32[num_constraints + 1] ‖ col u32[nnz] ‖ coeff u32[nnz]
+//! B: the same
+//! ```
+//!
+//! Columns index the assignment `z = [1, public…, witness…]`, where `public`
+//! and `witness` are the variable ids in the order `XarkCircuit` allocates
+//! them (by id).
+
+use std::collections::HashMap;
+
+use ark_bn254::Fr;
+use ark_ff::{BigInteger, PrimeField, Zero};
+use ark_relations::gr1cs::{
+    ConstraintSynthesizer, ConstraintSystem, Matrix, OptimizationGoal, R1CS_PREDICATE_LABEL,
+    SynthesisMode,
+};
+use rayon::prelude::*;
+use sha2::{Digest, Sha256};
+use xark_ir::{R1csProgram, VarId, Visibility};
+use xark_prover::XarkCircuit;
+
+use crate::{Error, Result};
+
+const MAGIC: &[u8; 4] = b"PPMX";
+const VERSION: u32 = 1;
+
+/// One matrix in compressed sparse rows.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Csr {
+    /// Row `i` is `start[i]..start[i + 1]` in `col` and `coeff`.
+    pub start: Vec<u32>,
+    /// Column: an index into the assignment.
+    pub col: Vec<u32>,
+    /// An index into [`Matrices::coeffs`].
+    pub coeff: Vec<u32>,
+}
+
+impl Csr {
+    pub fn rows(&self) -> usize {
+        self.start.len().saturating_sub(1)
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.col.len()
+    }
+
+    /// Row `i` times `z`.
+    pub fn eval(&self, i: usize, coeffs: &[Fr], z: &[Fr]) -> Fr {
+        let (from, to) = (self.start[i] as usize, self.start[i + 1] as usize);
+        let mut acc = Fr::zero();
+        for k in from..to {
+            let c = &coeffs[self.coeff[k] as usize];
+            let v = z[self.col[k] as usize];
+            if c.is_one() {
+                acc += v;
+            } else {
+                acc += *c * v;
+            }
+        }
+        acc
+    }
+}
+
+/// What a prover needs of a circuit besides its proving key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Matrices {
+    /// SHA-256 of the `circuit.xbc` these matrices are for.
+    pub fingerprint: [u8; 32],
+    pub num_constraints: usize,
+    /// Public variable ids, in assignment order (`z[1..]`).
+    pub instance: Vec<VarId>,
+    /// Witness variable ids, in assignment order (after the public ones).
+    pub witness: Vec<VarId>,
+    /// Distinct coefficients.
+    pub coeffs: Vec<Fr>,
+    pub a: Csr,
+    pub b: Csr,
+}
+
+trait IsOne {
+    fn is_one(&self) -> bool;
+}
+
+impl IsOne for Fr {
+    fn is_one(&self) -> bool {
+        *self == Fr::from(1u8)
+    }
+}
+
+impl Matrices {
+    /// From `circuit.xbc` and the minimized R1CS `xark setup --cache` wrote
+    /// for it (`r1cs.min.wcz`). Synthesizes the circuit the way Groth16 setup
+    /// did: several GB for a million constraints, so this is a build step.
+    pub fn build(xbc: &[u8], r1cs_cache: &[u8]) -> Result<Self> {
+        let fingerprint: [u8; 32] = Sha256::digest(xbc).into();
+        let hex: String = fingerprint.iter().map(|b| format!("{b:02x}")).collect();
+        let program = xark_ir::r1cs_cache::deserialize_if_fingerprint(r1cs_cache, &hex)
+            .ok_or_else(|| Error::Circuit("r1cs.min.wcz is not for this circuit.xbc".into()))?;
+        Self::from_program(fingerprint, program)
+    }
+
+    /// From a minimized program, as `XarkCircuit::for_setup_preminimized`
+    /// synthesizes it.
+    pub fn from_program(fingerprint: [u8; 32], program: R1csProgram) -> Result<Self> {
+        // XarkCircuit allocates by id: public variables become instance
+        // variables, every other one a witness.
+        let mut order: Vec<(VarId, bool)> = program
+            .variables
+            .iter()
+            .map(|v| (v.id, v.visibility == Visibility::Public))
+            .collect();
+        order.sort_unstable_by_key(|v| v.0);
+        let instance: Vec<VarId> = order.iter().filter(|v| v.1).map(|v| v.0).collect();
+        let witness: Vec<VarId> = order.iter().filter(|v| !v.1).map(|v| v.0).collect();
+
+        let cs = ConstraintSystem::<Fr>::new_ref();
+        cs.set_optimization_goal(OptimizationGoal::Constraints);
+        cs.set_mode(SynthesisMode::Setup);
+        XarkCircuit::for_setup_preminimized(program)
+            .generate_constraints(cs.clone())
+            .map_err(|e| Error::Circuit(format!("synthesis: {e}")))?;
+        cs.finalize();
+        if cs.num_instance_variables() != instance.len() + 1
+            || cs.num_witness_variables() != witness.len()
+        {
+            return Err(Error::Circuit(
+                "XarkCircuit allocated variables in an unexpected order".into(),
+            ));
+        }
+        let num_constraints = cs.num_constraints();
+        let mut all = cs
+            .to_matrices()
+            .map_err(|e| Error::Circuit(format!("matrices: {e}")))?;
+        drop(cs);
+        let mut abc = all
+            .remove(R1CS_PREDICATE_LABEL)
+            .ok_or_else(|| Error::Circuit("no R1CS matrices".into()))?;
+        abc.truncate(2);
+        let b = abc.pop().expect("B");
+        let a = abc.pop().expect("A");
+
+        let mut table: HashMap<Fr, u32> = HashMap::new();
+        let mut coeffs = Vec::new();
+        let mut compact = |m: Matrix<Fr>| -> Result<Csr> {
+            if m.len() != num_constraints {
+                return Err(Error::Circuit("matrix height".into()));
+            }
+            let mut out = Csr {
+                start: Vec::with_capacity(m.len() + 1),
+                ..Csr::default()
+            };
+            out.start.push(0);
+            for row in m {
+                for (c, col) in row {
+                    let next = coeffs.len() as u32;
+                    let k = *table.entry(c).or_insert_with(|| {
+                        coeffs.push(c);
+                        next
+                    });
+                    out.col.push(col as u32);
+                    out.coeff.push(k);
+                }
+                out.start.push(
+                    u32::try_from(out.col.len())
+                        .map_err(|_| Error::Circuit("more than 2^32 terms".into()))?,
+                );
+            }
+            Ok(out)
+        };
+        let a = compact(a)?;
+        let b = compact(b)?;
+        Ok(Self {
+            fingerprint,
+            num_constraints,
+            instance,
+            witness,
+            coeffs,
+            a,
+            b,
+        })
+    }
+
+    /// Length of the assignment `z`.
+    pub fn num_variables(&self) -> usize {
+        1 + self.instance.len() + self.witness.len()
+    }
+
+    pub fn write(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(
+            64 + 4 * (self.num_variables() + 2 * (self.a.nnz() + self.b.nnz()))
+                + 32 * self.coeffs.len(),
+        );
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&VERSION.to_le_bytes());
+        out.extend_from_slice(&self.fingerprint);
+        for n in [
+            self.num_constraints,
+            self.instance.len(),
+            self.witness.len(),
+            self.coeffs.len(),
+        ] {
+            out.extend_from_slice(&(n as u64).to_le_bytes());
+        }
+        let u32s = |out: &mut Vec<u8>, v: &[u32]| {
+            for x in v {
+                out.extend_from_slice(&x.to_le_bytes());
+            }
+        };
+        u32s(&mut out, &self.instance);
+        u32s(&mut out, &self.witness);
+        for c in &self.coeffs {
+            out.extend_from_slice(&c.into_bigint().to_bytes_le());
+        }
+        for m in [&self.a, &self.b] {
+            out.extend_from_slice(&(m.nnz() as u64).to_le_bytes());
+            u32s(&mut out, &m.start);
+            u32s(&mut out, &m.col);
+            u32s(&mut out, &m.coeff);
+        }
+        out
+    }
+
+    /// Parse and check a `matrices.bin`: every index in range, rows in
+    /// order, coefficients canonical.
+    pub fn read(bytes: &[u8]) -> Result<Self> {
+        let mut r = Reader { bytes, at: 0 };
+        if r.take(4)? != MAGIC {
+            return Err(bad("not a matrices file"));
+        }
+        if r.u32()? != VERSION {
+            return Err(bad("unknown version"));
+        }
+        let fingerprint: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
+        let num_constraints = r.len()?;
+        let n_instance = r.len()?;
+        let n_witness = r.len()?;
+        let n_coeffs = r.len()?;
+        let instance = r.u32s(n_instance)?;
+        let witness = r.u32s(n_witness)?;
+        let coeffs = (0..n_coeffs)
+            .map(|_| {
+                let b = r.take(32)?;
+                let c = Fr::from_le_bytes_mod_order(b);
+                if c.into_bigint().to_bytes_le() != b {
+                    return Err(bad("non-canonical coefficient"));
+                }
+                Ok(c)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let vars = 1 + n_instance + n_witness;
+        let mut matrix = || -> Result<Csr> {
+            let nnz = r.len()?;
+            let m = Csr {
+                start: r.u32s(num_constraints + 1)?,
+                col: r.u32s(nnz)?,
+                coeff: r.u32s(nnz)?,
+            };
+            if m.start[0] != 0
+                || m.start.windows(2).any(|w| w[0] > w[1])
+                || m.start[num_constraints] as usize != nnz
+            {
+                return Err(bad("rows out of order"));
+            }
+            if m.col.par_iter().any(|&c| c as usize >= vars)
+                || m.coeff.par_iter().any(|&c| c as usize >= n_coeffs)
+            {
+                return Err(bad("index out of range"));
+            }
+            Ok(m)
+        };
+        let a = matrix()?;
+        let b = matrix()?;
+        if r.at != bytes.len() {
+            return Err(bad("trailing bytes"));
+        }
+        Ok(Self {
+            fingerprint,
+            num_constraints,
+            instance,
+            witness,
+            coeffs,
+            a,
+            b,
+        })
+    }
+
+    /// Whether these matrices are for `circuit.xbc`.
+    pub fn is_for(&self, xbc: &[u8]) -> bool {
+        self.fingerprint == <[u8; 32]>::from(Sha256::digest(xbc))
+    }
+}
+
+fn bad(what: &str) -> Error {
+    Error::Format(what.into())
+}
+
+struct Reader<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Reader<'a> {
+    fn take(&mut self, n: usize) -> Result<&'a [u8]> {
+        let end = self.at.checked_add(n).ok_or_else(|| bad("truncated"))?;
+        let out = self
+            .bytes
+            .get(self.at..end)
+            .ok_or_else(|| bad("truncated"))?;
+        self.at = end;
+        Ok(out)
+    }
+
+    fn u32(&mut self) -> Result<u32> {
+        Ok(u32::from_le_bytes(self.take(4)?.try_into().expect("4")))
+    }
+
+    /// A u64 count, bounded by what is left to read.
+    fn len(&mut self) -> Result<usize> {
+        let n = u64::from_le_bytes(self.take(8)?.try_into().expect("8"));
+        usize::try_from(n)
+            .ok()
+            .filter(|&n| n <= self.bytes.len())
+            .ok_or_else(|| bad("length out of range"))
+    }
+
+    fn u32s(&mut self, n: usize) -> Result<Vec<u32>> {
+        let raw = self.take(n.checked_mul(4).ok_or_else(|| bad("truncated"))?)?;
+        Ok(raw
+            .chunks_exact(4)
+            .map(|c| u32::from_le_bytes(c.try_into().expect("4")))
+            .collect())
+    }
+}

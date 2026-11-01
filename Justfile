@@ -91,12 +91,14 @@ ci: fmt lint test check-no-std
 claim-artifacts:
     xark build crates/circuits/claim
     xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+    cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/claim/target/xark/passport_claim
 
 # Build the passport_enroll circuit and its dev-mode keys (NOT for production;
 # setup peaks at about 16 GB of memory).
 enroll-artifacts:
     xark build crates/circuits/enroll
     xark setup crates/circuits/enroll --insecure-dev-mode --deterministic-rng 1 --cache
+    cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/enroll/target/xark/passport_enroll
 
 # The multi-party setup of a circuit (see crates/ceremony): `just ceremony init
 # phase1.ptau crates/circuits/enroll/target/xark/passport_enroll 0000.params`, then

@@ -41,9 +41,9 @@ fn prover() -> &'static Prover {
     PROVER.get_or_init(|| {
         let dir = artifacts();
         let xbc = std::fs::read(dir.join("circuit.xbc")).expect("run `just claim-artifacts` first");
-        let cache =
-            std::fs::read(dir.join("r1cs.min.wcz")).expect("run `just claim-artifacts` first");
-        Prover::load(&xbc, &cache, &dir.join("pk.bin")).expect("circuit loads")
+        let matrices =
+            std::fs::read(dir.join("matrices.bin")).expect("run `just claim-artifacts` first");
+        Prover::load(&xbc, &matrices, &dir.join("pk.bin")).expect("circuit loads")
     })
 }
 

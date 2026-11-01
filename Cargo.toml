@@ -12,6 +12,7 @@ members = [
     "crates/circuits/gadgets/sha1",
     "crates/circuits/sha1",
     "crates/pki",
+    "crates/prover",
     "crates/attest",
     "crates/ceremony",
     "crates/cli",
@@ -46,6 +47,7 @@ passport-attest = { version = "0.1.0", path = "crates/attest" }
 passport-driver-emrtd = { version = "0.1.0", path = "crates/drivers/emrtd", default-features = false }
 passport-gadget-sha1 = { version = "0.1.0", path = "crates/circuits/gadgets/sha1" }
 passport-pki = { version = "0.1.0", path = "crates/pki" }
+passport-prover = { version = "0.1.0", path = "crates/prover" }
 passport-gadget-lds = { version = "0.1.0", path = "crates/circuits/gadgets/lds" }
 xark-sha256 = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
 passport-gadget-poseidon = { version = "0.1.0", path = "crates/circuits/gadgets/poseidon" }

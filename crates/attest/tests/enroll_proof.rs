@@ -32,7 +32,7 @@ fn an_enrollment_proof_verifies() {
     let started = Instant::now();
     let prover = Prover::load(
         &std::fs::read(dir.join("circuit.xbc")).expect("run `just enroll-artifacts`"),
-        &std::fs::read(dir.join("r1cs.min.wcz")).unwrap(),
+        &std::fs::read(dir.join("matrices.bin")).unwrap(),
         &dir.join("pk.bin"),
     )
     .unwrap();

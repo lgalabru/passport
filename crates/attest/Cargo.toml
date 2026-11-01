@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 passport-driver-emrtd = { workspace = true, features = ["std"] }
 passport-pki = { workspace = true }
+passport-prover = { workspace = true }
 xark-prover = { workspace = true }
 xark-ir = { workspace = true }
 xark-backend = { workspace = true }

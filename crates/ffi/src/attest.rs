@@ -6,7 +6,7 @@
 //!    `request_uri` link comes back as `"kind": "fetch"`; the app fetches it
 //!    and hands the body to [`passport_request_object`].
 //! 2. [`passport_prover_load`] once, with the directory holding the circuit
-//!    artifacts (`circuit.xbc`, `r1cs.min.wcz`, `pk.bin`).
+//!    artifacts (`circuit.xbc`, `matrices.bin`, `pk.bin`).
 //! 3. [`passport_preview`] for the consent screen: each requested claim with
 //!    the exact value the proof would carry.
 //! 4. [`passport_prove`] after consent: the compact claim proof and the
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn passport_prover_load(dir: *const c_char) -> *mut c_char
         };
         Prover::load(
             &read("circuit.xbc")?,
-            &read("r1cs.min.wcz")?,
+            &read("matrices.bin")?,
             &dir.join("pk.bin"),
         )
     };

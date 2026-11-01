@@ -60,7 +60,7 @@ char *passport_request_parse(const char *url);
 /// Parse a request object fetched from a request_uri (JWT or JSON).
 char *passport_request_object(const char *body, const char *client_id);
 
-/// Load circuit.xbc, r1cs.min.wcz and pk.bin from `dir`. Returns the kid.
+/// Load circuit.xbc, matrices.bin and pk.bin from `dir`. Returns the kid.
 char *passport_prover_load(const char *dir);
 
 /// Commitment and development-registry root for a document and secret.

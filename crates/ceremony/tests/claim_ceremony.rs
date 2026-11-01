@@ -51,7 +51,8 @@ fn run() {
     let out = std::env::temp_dir().join(format!("claim-ceremony-{}", rand::random::<u64>()));
     p.write_keys(&out).unwrap();
 
-    let prover = Prover::load(&xbc, &cache, &out.join("pk.bin")).unwrap();
+    let matrices = std::fs::read(dir.join("matrices.bin")).expect("run `just claim-artifacts`");
+    let prover = Prover::load(&xbc, &matrices, &out.join("pk.bin")).unwrap();
     let enrollment = Enrollment {
         secret: Fr::from(5u8),
         document: Document::from_mrz(TD3).unwrap(),
@@ -86,7 +87,7 @@ fn run() {
     verify_token(&token, prover.verifying_key(), &expect).unwrap();
 
     // A proof under the dev keys is not one under the ceremony's.
-    let dev = Prover::load(&xbc, &cache, &dir.join("pk.bin")).unwrap();
+    let dev = Prover::load(&xbc, &matrices, &dir.join("pk.bin")).unwrap();
     let dev_token = issue(
         &dev,
         &request,

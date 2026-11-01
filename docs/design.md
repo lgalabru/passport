@@ -355,7 +355,7 @@ each piece proves and what is still trusted.
 | 4. SOD, DG15, Active Authentication | Done in the reader (`ReadTarget::Sod`, `active_authenticate`) and natively in `crates/pki` (Passive Authentication to trusted CSCAs, ISO 9796-2). |
 | 5. circomlib Poseidon | Done: the gadget and native hash equal `sol_poseidon`. |
 | 6. RSA-2048 | Done: 24-limb bignum on the `lgalabru/xark` fork (`passport` branch); PKCS#1 v1.5 / SHA-256 in 206k constraints. |
-| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree for the MRZ's issuing state, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 9 s on an M-series Mac. |
+| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree for the MRZ's issuing state, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 5.5 s with a 1.8 GB peak on an M-series Mac (`crates/prover`). |
 | 8. Registry program | Done: `crates/programs/registry` (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree on `sol_poseidon`, recent roots). Only the program's upgrade authority can initialize it, and lamports sent to a PDA ahead of time cannot block it. The publisher's DSC tree comes from `enroll::dsc_tree`, which checks each DSC's chain, roles (keyUsage, basicConstraints, not a Master List Signer) and dates. |
 | 9. Ceremony and audits | The ceremony tool is done (`crates/ceremony`; it accepts a phase 1 only by a hash it knows or the operator gives); the ceremony itself and the audits are not. |
 
@@ -388,10 +388,11 @@ What is left:
 
 - **The phone enrolls locally.** The app still builds a one-leaf tree with
   the development issuer. Enrolling on the phone needs the enroll proving key
-  (about 200 MB, plus the 320 MB minimized R1CS) and about 5 GB while
-  proving, more than an app is allowed by default; and a relayer to submit
-  the transaction. Until then the app's tokens say `zk_dev`, and verifiers
-  must not accept them as passports.
+  (200 MB) and its constraint matrices (`matrices.bin`, 246 MB), about 1.8 GB
+  while proving (`crates/prover` proves from compact matrices instead of
+  re-synthesizing the circuit, which peaked near 8 GB), and a relayer to
+  submit the transaction. Until then the app's tokens say `zk_dev`, and
+  verifiers must not accept them as passports.
 - **More document profiles**: ECDSA and RSA-PSS Document Signers, RSA-3072
   and 4096, SHA-1 and SHA-384 LDS hashes, ECDSA Active Authentication, and
   documents without AA (Chip Authentication cannot be proven to a third
