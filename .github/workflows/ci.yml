@@ -38,7 +38,8 @@ jobs:
           cargo test --workspace
           --exclude passport_aa --exclude passport_dsc_sig --exclude passport_sha1
           --exclude passport_rsa2048 --exclude passport_enroll
-          --exclude passport-attest --exclude passport-ffi --exclude passport-e2e
+          --exclude passport-attest --exclude passport-ffi --exclude passport-prover
+          --exclude passport-e2e
       # The document vocabulary and the eMRTD driver run on a Flipper Zero.
       - name: no_std builds
         run: |
@@ -89,7 +90,7 @@ jobs:
           cargo test --release -p passport_sha1 -p passport_dsc_sig -p passport_aa
           -p passport_rsa2048 -p passport_enroll
       - name: Claim proof tests
-        run: cargo test --release -p passport-attest -p passport-ffi
+        run: cargo test --release -p passport-attest -p passport-ffi -p passport-prover
       - name: The claim circuit through a ceremony
         run: cargo test --release -p passport-ceremony --test claim_ceremony -- --ignored
       - name: Upload the circuit artifacts
