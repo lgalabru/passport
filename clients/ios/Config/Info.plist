@@ -70,5 +70,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>PassportRegistry</key>
+	<dict>
+		<key>ProgramId</key>
+		<string></string>
+		<key>RPC</key>
+		<string>https://api.devnet.solana.com</string>
+		<key>Relayer</key>
+		<string></string>
+		<key>Artifacts</key>
+		<string></string>
+		<key>SignerList</key>
+		<string></string>
+	</dict>
 </dict>
 </plist>

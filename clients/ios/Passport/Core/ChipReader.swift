@@ -72,7 +72,16 @@ struct ReadResults {
     var record: MRZRecord?
     var dg1: Data?
     var saved: [ChipFile: SavedFile] = [:]
+    /// The bytes of the saved files enrollment needs (EF.SOD, DG15).
+    var files: [ChipFile: Data] = [:]
+    var activeAuthentication: ActiveAuthentication?
     var protocolName: String?
+}
+
+/// The chip's answer to a challenge, both hex.
+struct ActiveAuthentication: Codable, Equatable, Hashable {
+    var challenge: String
+    var signature: String
 }
 
 struct SavedFile: Codable, Equatable, Hashable {
@@ -87,18 +96,27 @@ final class ChipReader {
     private let worker = DispatchQueue(label: "passport.reader", qos: .userInitiated)
     private var link: NFCLink?
     private var cancelled = false
+    private var challenge: ((ReadResults) -> String?)?
+
+    /// Files whose bytes are kept in `ReadResults.files`.
+    private static let kept: Set<ChipFile> = [.sod, .dg(15)]
 
     /// Delay per APDU for the demo chip, so the animation has something to show.
     static let demoDelayMs: UInt32 = 9
 
+    /// `challenge`, when given, runs Active Authentication after the files
+    /// are read, in the same session, with the challenge it derives from
+    /// them (`nil` to skip, e.g. a chip without DG15).
     func start(
         key: DocumentKey,
         plan: [ChipFile],
         demo: Bool,
         directory: URL,
         progress: ReadProgress,
+        challenge: ((ReadResults) -> String?)? = nil,
         completion: @escaping (ReadResults) -> Void
     ) {
+        self.challenge = challenge
         cancelled = false
         let bridge = HostBridge(directory: directory)
         wire(bridge, to: progress)
@@ -234,6 +252,9 @@ final class ChipReader {
                 main { progress.completed.append(file) }
             case .success(.saved(let name, let bytes, let format)):
                 results.saved[file] = SavedFile(name: name, bytes: bytes, format: format)
+                if Self.kept.contains(file) {
+                    results.files[file] = try? Data(contentsOf: bridge.directory.appendingPathComponent(name))
+                }
                 main { progress.completed.append(file) }
             case .failure(let error):
                 // The index and the extra groups are optional; the identity is not.
@@ -244,6 +265,28 @@ final class ChipReader {
                 }
             }
             if failure != nil { break }
+        }
+
+        if failure == nil, !cancelled, let challenge = challenge?(results) {
+            link?.setMessage("Checking the chip is genuine…")
+            main { progress.append(LogLine(level: .info, text: "Active Authentication, challenge \(challenge)")) }
+            var answer = withUnsafePointer(to: &host) { pointer in
+                PassportCore.activeAuthenticate(host: pointer, key: key, challengeHex: challenge, demoDelay: demo ? Self.demoDelayMs : nil)
+            }
+            if case .failure(let error) = answer, error.retryable, !demo, link?.reconnect() == true {
+                bridge.protocolCode = link?.protocolCode ?? 0
+                host = bridge.makeHost()
+                answer = withUnsafePointer(to: &host) { pointer in
+                    PassportCore.activeAuthenticate(host: pointer, key: key, challengeHex: challenge, demoDelay: nil)
+                }
+            }
+            switch answer {
+            case .success(let signature):
+                results.activeAuthentication = ActiveAuthentication(challenge: challenge, signature: signature)
+            case .failure(let error):
+                // Not fatal: the compatibility check reports it.
+                main { progress.append(LogLine(level: .warn, text: "Active Authentication: \(error.error)")) }
+            }
         }
 
         let finalFailure = failure
@@ -274,6 +317,7 @@ final class ChipReader {
         case .com: return "Opening the chip… \(step)"
         case .dg(1): return "Reading your details… \(step)"
         case .dg(2): return "Reading your photo… keep still \(step)"
+        case .sod: return "Reading the issuer's signature… \(step)"
         default: return "Reading \(file.shortName)… \(step)"
         }
     }

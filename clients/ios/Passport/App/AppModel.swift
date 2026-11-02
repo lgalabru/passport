@@ -16,6 +16,29 @@ final class Setup {
     var error: String?
 }
 
+/// Enrolling the document in the on-chain registry: download, prove, relay.
+@Observable
+final class EnrollmentSession {
+    enum Phase: Equatable {
+        case downloading(Double)
+        case proving
+        case sending
+        case confirming
+        case done
+        case failed(String)
+    }
+
+    var phase: Phase = .downloading(0)
+    var proofMillis: Int?
+
+    var isRunning: Bool {
+        switch phase {
+        case .done, .failed: false
+        default: true
+        }
+    }
+}
+
 /// One incoming request, from link to answer.
 @Observable
 final class RequestSession: Identifiable {
@@ -46,6 +69,8 @@ final class AppModel {
     var history: [Presentation]
     var setup: Setup?
     var session: RequestSession?
+    var enrollment: EnrollmentSession?
+    let registry = RegistryConfig.current
     /// What the second page shows on an unfolded Duo (and what is pushed on one screen).
     var selection: Selection?
 
@@ -171,10 +196,28 @@ final class AppModel {
         setup.error = nil
         setup.step = .reading
         let useSample = sample || !nfcAvailable
-        let progress = ReadProgress(plan: [.dg(1), .dg(2)], demo: useSample)
+        // DG1 and the photo for the app; EF.SOD, DG15 and the chip's answer
+        // to a challenge for enrollment, all in one tap.
+        let progress = ReadProgress(plan: [.dg(1), .dg(2), .sod, .dg(15)], demo: useSample)
         setup.progress = progress
-        reader.start(key: key, plan: progress.plan, demo: useSample, directory: Vault.readsDirectory, progress: progress) { [weak self] results in
-            self?.enroll(results, key: key, setup: setup, sample: useSample)
+        guard let secret = Vault.secretHex(create: true) else {
+            setup.error = "Could not create a key on this iPhone."
+            return
+        }
+        reader.start(
+            key: key, plan: progress.plan, demo: useSample, directory: Vault.readsDirectory, progress: progress,
+            challenge: { results in
+                guard let dg1 = results.dg1, let dg15 = results.files[.dg(15)] else { return nil }
+                // The challenge enrollment needs; a random one when this
+                // document cannot enroll, so the check still says whether
+                // the chip is genuine.
+                return EnrollmentCore.challenge(
+                    dg1Hex: dg1.hexString, dg15Hex: dg15.hexString,
+                    sodHex: results.files[.sod]?.hexString ?? "", secretHex: secret
+                ) ?? (0..<8).map { _ in String(format: "%02X", UInt8.random(in: 0...255)) }.joined()
+            }
+        ) { [weak self] results in
+            self?.enroll(results, key: key, secret: secret, setup: setup, sample: useSample)
         }
     }
 
@@ -182,7 +225,9 @@ final class AppModel {
         reader.cancel()
     }
 
-    private func enroll(_ results: ReadResults, key: DocumentKey, setup: Setup, sample: Bool) {
+    /// `secret` is the one the challenge was derived from: the chip's
+    /// answer only fits a commitment to it.
+    private func enroll(_ results: ReadResults, key: DocumentKey, secret: String, setup: Setup, sample: Bool) {
         guard let record = results.record, let dg1 = results.dg1 else {
             if case .failed(let failure) = setup.progress?.status {
                 setup.error = failure.message
@@ -190,14 +235,22 @@ final class AppModel {
             return
         }
         do {
-            guard let secret = Vault.secretHex(create: true) else {
-                throw AttestationError(message: "Could not create a key on this iPhone.")
-            }
             let commitment = try Attestation.enroll(dg1Hex: dg1.hexString, secretHex: secret)
+            let dg15 = results.files[.dg(15)]?.hexString
+            let sod = results.files[.sod]?.hexString
+            let compatibility = sod.flatMap { sod in
+                try? EnrollmentCore.check(
+                    dg1Hex: dg1.hexString, dg15Hex: dg15 ?? "", sodHex: sod, secretHex: secret,
+                    activeAuthentication: results.activeAuthentication
+                )
+            }
             let identity = Identity(
                 record: record, dg1Hex: dg1.hexString, key: key,
                 portraitFile: results.saved[.dg(2)]?.name, commitment: commitment,
-                enrolledAt: Date(), sample: sample
+                enrolledAt: Date(), sample: sample,
+                dg15Hex: dg15, sodHex: sod,
+                activeAuthentication: results.activeAuthentication,
+                compatibility: compatibility
             )
             Vault.save(identity)
             self.identity = identity
@@ -226,6 +279,74 @@ final class AppModel {
                 await MainActor.run { _ = UIApplication.shared.perform(Selector(("suspend"))) }
             }
             #endif
+        }
+    }
+
+    // MARK: Enrolling in the registry
+
+    /// Why this document cannot enroll on-chain from this build, if it cannot.
+    var enrollmentBlocker: String? {
+        guard let identity else { return "Add a passport first." }
+        if identity.onChain != nil { return nil }
+        if let missing = registry.missing { return missing }
+        guard let compatibility = identity.compatibility else {
+            return "Read your passport again: this version also checks the chip's signature."
+        }
+        if !compatibility.enrollable { return "This passport cannot enroll yet; see Compatibility." }
+        return nil
+    }
+
+    func enrollOnChain() {
+        guard enrollmentBlocker == nil, enrollment?.isRunning != true,
+              let identity, let sod = identity.sodHex, let dg15 = identity.dg15Hex,
+              let aa = identity.activeAuthentication, let secret = Vault.secretHex(create: false),
+              let artifacts = registry.artifacts, let signerList = registry.signerList,
+              let relayerURL = registry.relayer, let rpc = registry.rpc else { return }
+        let session = EnrollmentSession()
+        enrollment = session
+        let config = registry
+        Task { @MainActor in
+            do {
+                if let shortfall = MemoryCheck.shortfall() { throw EnrollmentError(message: shortfall) }
+                let dir = try await EnrollArtifacts.ensure(from: artifacts) { fraction in
+                    Task { @MainActor in session.phase = .downloading(fraction) }
+                }
+                // The publisher's signer list, and the roots the registry trusts.
+                let (list, _) = try await URLSession.shared.data(from: signerList)
+                guard var dsc = try JSONSerialization.jsonObject(with: list) as? [String: Any] else {
+                    throw EnrollmentError(message: "The document signer list is unreadable.")
+                }
+                dsc["trusted_roots"] = try await RegistrySync.state(config).signerRoots
+
+                session.phase = .proving
+                let proof = try await EnrollmentCore.prove(
+                    artifacts: dir, dg1Hex: identity.dg1Hex, dg15Hex: dg15, sodHex: sod,
+                    secretHex: secret, aaHex: aa.signature, signerList: jsonString(dsc)
+                )
+                session.proofMillis = proof.millis
+
+                session.phase = .sending
+                let relayer = Relayer(rpc: JSONRPC(url: relayerURL))
+                let transaction = try EnrollmentCore.transaction(
+                    programId: config.programId, feePayer: try await relayer.feePayer(),
+                    blockhash: try await relayer.blockhash(), instruction: proof.instruction
+                )
+                let signature = try await relayer.signAndSend(transaction)
+
+                session.phase = .confirming
+                try await Solana(rpc: JSONRPC(url: rpc)).confirm(signature)
+
+                var enrolled = identity
+                enrolled.onChain = OnChainEnrollment(
+                    programId: config.programId, signature: signature,
+                    commitment: proof.commitment, enrolledAt: Date()
+                )
+                Vault.save(enrolled)
+                self.identity = enrolled
+                session.phase = .done
+            } catch {
+                session.phase = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -275,7 +396,17 @@ final class AppModel {
         guard await authenticate(reason: "Share with \(request.displayName)") else { return }
         do {
             session.phase = .proving
-            let proof = try await Attestation.prove(request, dg1Hex: identity.dg1Hex, secretHex: secret)
+            let proof: Attestation.Proof
+            if let onChain = identity.onChain, onChain.programId == registry.programId,
+               let dg15 = identity.dg15Hex, let sod = identity.sodHex {
+                let view = try await RegistrySync.sync(registry)
+                proof = try await Attestation.proveEnrolled(
+                    request, dg1Hex: identity.dg1Hex, dg15Hex: dg15, sodHex: sod,
+                    secretHex: secret, registry: view.json(programId: onChain.programId)
+                )
+            } else {
+                proof = try await Attestation.prove(request, dg1Hex: identity.dg1Hex, secretHex: secret)
+            }
             session.phase = .sending
             let redirect = try await Attestation.post(proof.body, to: request)
             let record = Presentation(

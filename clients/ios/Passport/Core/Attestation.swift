@@ -50,7 +50,7 @@ enum Attestation {
         return decoder
     }()
 
-    private static func call(_ pointer: UnsafeMutablePointer<CChar>?) throws -> [String: Any] {
+    static func call(_ pointer: UnsafeMutablePointer<CChar>?) throws -> [String: Any] {
         guard let pointer else { throw AttestationError(message: "No answer from the core") }
         defer { passport_string_free(pointer) }
         let data = Data(String(cString: pointer).utf8)
@@ -145,6 +145,23 @@ enum Attestation {
     static func prove(_ request: VerificationRequest, dg1Hex: String, secretHex: String) async throws -> Proof {
         try await Task.detached(priority: .userInitiated) {
             let object = try call(passport_prove(request.json, dg1Hex, secretHex, Int64(Date().timeIntervalSince1970)))
+            return Proof(
+                token: object["token"] as? String ?? "",
+                body: object["body"] as? String ?? "",
+                millis: object["millis"] as? Int ?? 0
+            )
+        }.value
+    }
+
+    /// Prove against the on-chain registry (`registry` from `RegistrySync`).
+    static func proveEnrolled(
+        _ request: VerificationRequest, dg1Hex: String, dg15Hex: String, sodHex: String,
+        secretHex: String, registry: String
+    ) async throws -> Proof {
+        try await Task.detached(priority: .userInitiated) {
+            let object = try call(passport_prove_enrolled(
+                request.json, dg1Hex, dg15Hex, sodHex, secretHex, registry, Int64(Date().timeIntervalSince1970)
+            ))
             return Proof(
                 token: object["token"] as? String ?? "",
                 body: object["body"] as? String ?? "",

@@ -64,7 +64,8 @@ struct PassportCard: View {
     private var maskedFace: some View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Read from chip", systemImage: "wave.3.right")
+                Label(identity.verified ? "Verified passport" : "Read from chip",
+                      systemImage: identity.verified ? "checkmark.seal.fill" : "wave.3.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.75))
                 Text("•••• \(lastCharacters)")

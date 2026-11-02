@@ -37,7 +37,7 @@ where other programs can condition on it.
 | --- | --- | --- |
 | 📖 **Read** | ICAO 9303 over NFC: BAC, secure messaging, DG1, DG2, EF.SOD, Active Authentication. One `no_std` reader runs on the iPhone and the Flipper. | Works |
 | 🔏 **Verify** | Passive Authentication (data group hashes, SOD signature, DSC chain to a CSCA) and Active Authentication, natively. | Works: [`crates/pki`](crates/pki) |
-| 🧮 **Claim** | `passport_claim`: age, nationality, issuer, expiry and birth date over the MRZ, plus registry membership. Proves in about 0.2 s on an iPhone. Verifiers pin the issuer, the claims, fresh `iat` and trusted roots. | Works, with dev keys; the app still enrolls locally |
+| 🧮 **Claim** | `passport_claim`: age, nationality, issuer, expiry and birth date over the MRZ, plus registry membership. Proves in about 0.2 s on an iPhone. Verifiers pin the issuer, the claims, fresh `iat` and trusted roots. | Works, with dev keys |
 | 📲 **Present** | The iOS app answers [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html) requests with a compact, JWT-shaped claim proof. | Works |
 | 🪪 **Enroll** | `passport_enroll`: proves the SOD, the DSC chain, the DG15 binding and AA in zero knowledge, so the registry only admits documents a state issued. 1.1M constraints, about 5.5 s and 1.8 GB on a Mac. | Works, with dev keys |
 | ⛓️ **Attest** | The registry program (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree), and a verifier program that issues SAS attestations. | The registry runs in surfpool; SAS is next |
@@ -85,6 +85,15 @@ reader through [`crates/ffi`](crates/ffi). Simulators have no NFC, so they
 offer "Use Sample Passport" instead. On a phone, open
 `clients/ios/Passport.xcodeproj` and set your team. The circuit, minimized
 R1CS and proving key add 3.3 MB to the app.
+
+The same tap reads EF.SOD and DG15 and runs Active Authentication, and the
+app lists whether the passport can enroll, check by check (RSA-2048 signers
+and RSA-1024 chip keys for now). "Verify Passport" then downloads the
+enrollment circuit, proves on the phone and sends the proof to the registry
+through a Kora relayer; claim proofs from then on are checked against the
+on-chain registry. Point a build at a registry, RPC endpoint, relayer,
+artifact host and signer list with the `PassportRegistry` keys in
+`clients/ios/Config/Info.plist`.
 
 On iPhone Duo the app follows the hinge. Folded, the cover display shows a
 single stack. Unfolded, the document sits on one half and the request or

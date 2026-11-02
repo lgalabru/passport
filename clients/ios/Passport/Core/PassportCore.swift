@@ -14,17 +14,20 @@ struct DocumentKey: Codable, Equatable, Sendable {
     static let specimen = DocumentKey(documentNumber: "L898902C3", dateOfBirth: "740812", dateOfExpiry: "120415")
 }
 
-/// What a file on the chip is addressed as: `EF.COM` or a data group.
+/// What a file on the chip is addressed as: `EF.COM`, `EF.SOD` or a data group.
 enum ChipFile: Hashable, Codable, Sendable, Identifiable {
     case com
+    case sod
     case dg(Int)
 
     var id: Int { Int(code) }
 
-    /// The code `passport_read` takes: 0 for `EF.COM`, `n` for DG*n*.
+    /// The code `passport_read` takes: 0 for `EF.COM`, `n` for DG*n*, 0x1D
+    /// (its file id's low byte) for `EF.SOD`.
     var code: UInt8 {
         switch self {
         case .com: 0
+        case .sod: 0x1D
         case .dg(let n): UInt8(n)
         }
     }
@@ -32,6 +35,7 @@ enum ChipFile: Hashable, Codable, Sendable, Identifiable {
     var shortName: String {
         switch self {
         case .com: "COM"
+        case .sod: "SOD"
         case .dg(let n): "DG\(n)"
         }
     }
@@ -39,6 +43,7 @@ enum ChipFile: Hashable, Codable, Sendable, Identifiable {
     var title: String {
         switch self {
         case .com: "Index"
+        case .sod: "Security object"
         case .dg(let n): DataGroupInfo.title(n)
         }
     }
@@ -260,6 +265,46 @@ enum PassportCore {
             pointer = passport_read(host, key.documentNumber, key.dateOfBirth, key.dateOfExpiry, file.code)
         }
         return decodeResult(take(pointer))
+    }
+}
+
+extension PassportCore {
+    /// Active Authentication: the chip signs `challengeHex` (16 hex digits)
+    /// with its DG15 key. Returns the signature, hex.
+    static func activeAuthenticate(
+        host: UnsafePointer<PassportHost>,
+        key: DocumentKey,
+        challengeHex: String,
+        demoDelay: UInt32?
+    ) -> Result<String, ReadFailure> {
+        let pointer: UnsafeMutablePointer<CChar>?
+        if let demoDelay {
+            pointer = passport_demo_active_authenticate(host, key.documentNumber, key.dateOfBirth, key.dateOfExpiry, challengeHex, demoDelay)
+        } else {
+            pointer = passport_active_authenticate(host, key.documentNumber, key.dateOfBirth, key.dateOfExpiry, challengeHex)
+        }
+        struct Raw: Decodable {
+            var ok: Bool
+            var signature: String?
+            var error: String?
+            var hint: String?
+            var retryable: Bool?
+            var statusWord: String?
+        }
+        guard let pointer else { return .failure(ReadFailure(error: "No answer from the core", retryable: false)) }
+        defer { passport_string_free(pointer) }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let raw = try? decoder.decode(Raw.self, from: Data(String(cString: pointer).utf8)) else {
+            return .failure(ReadFailure(error: "Unreadable reader result", retryable: false))
+        }
+        guard raw.ok, let signature = raw.signature else {
+            return .failure(ReadFailure(
+                error: raw.error ?? "Active Authentication failed", hint: raw.hint,
+                retryable: raw.retryable ?? false, statusWord: raw.statusWord
+            ))
+        }
+        return .success(signature)
     }
 }
 

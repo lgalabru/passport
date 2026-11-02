@@ -55,6 +55,8 @@ struct HomeView: View {
                 }
             }
 
+            VerificationSection(identity: identity)
+
             if !masked {
                 Section {
                     row(.document) {

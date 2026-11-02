@@ -9,10 +9,25 @@ struct Identity: Codable, Equatable {
     /// The BAC key, to read the chip again.
     var key: DocumentKey
     var portraitFile: String?
+    /// The commitment of a development tree holding only this document.
     var commitment: String
+    /// When the chip was read.
     var enrolledAt: Date
     /// Read from the built-in specimen chip rather than a real document.
     var sample: Bool
+    /// DG15 (the chip's Active Authentication key) and EF.SOD, hex: what
+    /// enrollment and registry claim proofs bind besides DG1.
+    var dg15Hex: String?
+    var sodHex: String?
+    /// The chip's answer to this enrollment's challenge.
+    var activeAuthentication: ActiveAuthentication?
+    var compatibility: Compatibility?
+    /// Set once the registry admitted the enrollment proof.
+    var onChain: OnChainEnrollment?
+
+    /// Proofs are backed by the on-chain registry (`zk_enrolled`), not a
+    /// tree on this iPhone (`zk_dev`).
+    var verified: Bool { onChain != nil }
 }
 
 /// One answered request, for the person's own record.
@@ -35,6 +50,12 @@ struct Presentation: Codable, Equatable, Identifiable {
 /// everything else lives in Application Support under complete file protection.
 enum Vault {
     private static let service = "org.solana.passport"
+
+    static var supportDirectory: URL { support }
+
+    static var cachesDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    }
 
     private static var support: URL {
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

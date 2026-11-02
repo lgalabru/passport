@@ -52,7 +52,7 @@ private struct SetupIntro: View {
                         Feature(symbol: "text.viewfinder", title: "Scan the photo page",
                                 text: "The two lines of letters at the bottom unlock the chip inside your passport.")
                         Feature(symbol: "wave.3.right", title: "Hold iPhone to your passport",
-                                text: "The chip proves your passport is genuine and holds your photo and details.")
+                                text: "The chip holds your photo and details, signed by the country that issued it. Passport checks that signature and that the chip is the original.")
                         Feature(symbol: "lock.shield", title: "Share answers, not your passport",
                                 text: "When a website asks if you're over 18, it gets a mathematical proof of “yes”, and nothing else.")
                     }

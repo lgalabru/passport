@@ -52,12 +52,20 @@ struct DocumentDetails: View {
                          : "Read directly from the chip in your document over NFC.")
                 }
                 Section {
-                    LabeledContent("Registry", value: "On this iPhone")
+                    LabeledContent("Registry", value: identity.onChain == nil ? "On this iPhone" : "Solana")
+                    if let onChain = identity.onChain {
+                        LabeledContent("Program", value: String(onChain.programId.prefix(8)) + "…")
+                        LabeledContent("Evidence", value: "Chip and issuer verified")
+                    } else {
+                        LabeledContent("Evidence", value: "None (development)")
+                    }
                     LabeledContent("Proof System", value: "Groth16 · BN254")
                 } header: {
                     Text("Proofs")
                 } footer: {
-                    Text("Development version: proofs are checked against a registry kept on this iPhone, with test keys. Relying parties should not accept them as evidence yet.")
+                    Text(identity.onChain == nil
+                         ? "Development: proofs are checked against a registry kept on this iPhone. Relying parties should not accept them as evidence. Verify your passport to enroll it in the registry."
+                         : "Proofs are checked against the passport registry on Solana. Its keys come from a development setup until the trusted setup ceremony is done.")
                 }
             }
             .listStyle(.insetGrouped)
