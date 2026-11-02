@@ -8,17 +8,52 @@
 //! ```
 //!
 //! `RP_NAME` and `RP_PURPOSE` set the name and the reason the wallet shows.
+//!
+//! With `REGISTRY_PROGRAM_ID` (and `SOLANA_RPC_URL`, devnet by default) it
+//! accepts only proofs from that registry, against the recent roots it reads
+//! from the registry account when the proof arrives. Without, it accepts the
+//! development issuer and any root, which proves nothing about a passport.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 
+use passport_attest::Fr;
 use passport_attest::claims::Claim;
 use passport_attest::oid4vp::{decode_component as decode, encode_component};
 use passport_attest::prover::read_verifying_key;
-use passport_attest::token::{DEV_ISSUER, Expectations, Roots, verify_token};
+use passport_attest::token::{DEV_ISSUER, Expectations, Roots, registry_issuer, verify_token};
 use serde_json::{Value, json};
 
 const RESPONSE_URI: &str = "http://localhost:8787/response";
+
+/// The registry's recent roots, read from its account at `confirmed`.
+fn registry_roots(rpc: &str, program_id: &str) -> Result<Vec<Fr>, String> {
+    use base64::Engine;
+    use passport_attest::ark_ff::PrimeField;
+    use passport_registry::client::{Address, read_state, registry_address};
+    let program: Address = program_id.parse().map_err(|_| "bad program id")?;
+    let reply: Value = ureq::post(rpc)
+        .send_json(json!({
+            "jsonrpc": "2.0", "id": 1, "method": "getAccountInfo",
+            "params": [registry_address(&program).to_string(), { "encoding": "base64", "commitment": "confirmed" }],
+        }))
+        .map_err(|e| e.to_string())?
+        .body_mut()
+        .read_json()
+        .map_err(|e| e.to_string())?;
+    let data = reply["result"]["value"]["data"][0]
+        .as_str()
+        .ok_or("the registry account does not exist")?;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| e.to_string())?;
+    let state = read_state(&data).ok_or("not an initialized registry")?;
+    Ok(state
+        .recent_roots
+        .iter()
+        .map(|r| Fr::from_be_bytes_mod_order(r))
+        .collect())
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -95,8 +130,25 @@ fn main() {
                 serde_json::from_str(&field("vp_token").unwrap_or_default()).unwrap_or_default();
             let token = vp["passport"][0].as_str().unwrap_or_default();
             let holder = format!("nonce:{nonce}");
+            let registry = std::env::var("REGISTRY_PROGRAM_ID").ok();
+            let rpc = std::env::var("SOLANA_RPC_URL")
+                .unwrap_or_else(|_| "https://api.devnet.solana.com".into());
+            let roots = match &registry {
+                Some(program) => match registry_roots(&rpc, program) {
+                    Ok(roots) => Some(roots),
+                    Err(e) => {
+                        println!("REJECTED cannot read the registry: {e}");
+                        None
+                    }
+                },
+                None => None,
+            };
+            let issuer = registry
+                .as_deref()
+                .map(registry_issuer)
+                .unwrap_or_else(|| DEV_ISSUER.to_string());
             let expect = Expectations {
-                issuer: DEV_ISSUER,
+                issuer: &issuer,
                 audience: &client_id,
                 holder: &holder,
                 now: std::time::SystemTime::now()
@@ -104,9 +156,19 @@ fn main() {
                     .unwrap()
                     .as_secs() as i64,
                 claims: &claims,
-                roots: Roots::AnyDevelopment,
+                roots: match &roots {
+                    Some(roots) => Roots::Trusted(roots),
+                    None => Roots::AnyDevelopment,
+                },
             };
-            match verify_token(token, &vk, &expect) {
+            let verdict = if registry.is_some() && roots.is_none() {
+                Err(passport_attest::Error::Rejected(
+                    "registry unavailable".into(),
+                ))
+            } else {
+                verify_token(token, &vk, &expect)
+            };
+            match verdict {
                 Ok(verified) => {
                     println!("VERIFIED {}", verified.payload["verified_claims"]["claims"]);
                     println!("sub {}", verified.payload["sub"]);

@@ -13,6 +13,7 @@
 //! | [`passport_key_info`] | Normalise a typed MRZ key and show its check digits. |
 //! | [`passport_parse_mrz`] | Parse a camera-scanned MRZ and verify its check digits. |
 //! | [`attest`] functions | OpenID4VP requests in, claim proofs out (see that module). |
+//! | [`enroll`] functions | Compatibility, enrollment proofs and transactions, registry sync. |
 //! | [`passport_string_free`] | Free any string returned by this crate. |
 //!
 //! The header Swift imports is `clients/ios/RustCore/include/passport_ffi.h`; keep it
@@ -20,6 +21,7 @@
 
 mod attest;
 mod demo;
+mod enroll;
 mod json;
 
 use std::cell::Cell;

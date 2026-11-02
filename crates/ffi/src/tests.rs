@@ -366,3 +366,233 @@ fn demo_dg1() -> Vec<u8> {
     dg1.extend_from_slice(demo::SPECIMEN_MRZ);
     dg1
 }
+
+fn c(s: &str) -> CString {
+    CString::new(s).unwrap()
+}
+
+/// The specimen through the enrollment calls: prepare, the chip signs the
+/// challenge, the check passes; then a registry holding its commitment, and
+/// a claim proof against that registry a relying party accepts.
+#[test]
+fn the_specimen_checks_enrolls_and_proves_against_the_registry() {
+    use super::enroll::*;
+    use base64::Engine as _;
+    use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+
+    let (dg1, dg15, sod) = (
+        c(&json::hex(&demo_dg1())),
+        c(&json::hex(&demo_file(15))),
+        c(&json::hex(&demo_file(crate::TARGET_SOD))),
+    );
+    let secret = c(&"22".repeat(32));
+    let prepared = take(unsafe {
+        passport_enroll_prepare(dg1.as_ptr(), dg15.as_ptr(), sod.as_ptr(), secret.as_ptr())
+    });
+    assert_eq!(prepared["ok"], true, "{prepared}");
+    let challenge = prepared["challenge"].as_str().unwrap();
+    let aa = demo_authenticate(demo::SPECIMEN_KEY, challenge);
+    let aa = c(aa["signature"].as_str().unwrap());
+    let ch = c(challenge);
+
+    let report = take(unsafe {
+        passport_enroll_check(
+            dg1.as_ptr(),
+            dg15.as_ptr(),
+            sod.as_ptr(),
+            secret.as_ptr(),
+            ch.as_ptr(),
+            aa.as_ptr(),
+        )
+    });
+    assert_eq!(report["enrollable"], true, "{report}");
+    assert_eq!(report["issuing_state"], "UTO");
+    assert_eq!(report["checks"].as_array().unwrap().len(), 6);
+    // Without DG15 or an answer it cannot enroll, and says which check failed.
+    let none = c("");
+    let report = take(unsafe {
+        passport_enroll_check(
+            dg1.as_ptr(),
+            none.as_ptr(),
+            sod.as_ptr(),
+            secret.as_ptr(),
+            none.as_ptr(),
+            none.as_ptr(),
+        )
+    });
+    assert_eq!(report["enrollable"], false, "{report}");
+    let failed: Vec<&str> = report["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["passed"] == false)
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(failed, ["chip_key"]);
+
+    // A DSC list that does not hold the signer is refused before proving.
+    let dsc = c(r#"{"leaves":[]}"#);
+    let refused = take(unsafe {
+        passport_enroll_prove(
+            dg1.as_ptr(),
+            dg15.as_ptr(),
+            sod.as_ptr(),
+            secret.as_ptr(),
+            aa.as_ptr(),
+            dsc.as_ptr(),
+        )
+    });
+    assert!(
+        refused["error"].as_str().unwrap().contains("does not list"),
+        "{refused}"
+    );
+
+    // The transaction around an ENROLL instruction.
+    let program = "PassReg111111111111111111111111111111111111";
+    let instruction = c(&STANDARD.encode(passport_registry::client::enroll_data(
+        &[7; passport_registry::PROOF_BYTES],
+        &[1; 32],
+        &[2; 32],
+        &[3; 32],
+    )));
+    let (program_c, payer, blockhash) = (
+        c(program),
+        c("11111111111111111111111111111112"),
+        c("4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"),
+    );
+    let tx = take(unsafe {
+        passport_enroll_transaction(
+            program_c.as_ptr(),
+            payer.as_ptr(),
+            blockhash.as_ptr(),
+            instruction.as_ptr(),
+        )
+    });
+    assert_eq!(tx["ok"], true, "{tx}");
+    assert_eq!(
+        STANDARD
+            .decode(tx["transaction"].as_str().unwrap())
+            .unwrap()[0],
+        1
+    );
+
+    // The registry account after the specimen and one other enrolled.
+    let commitment = URL_SAFE_NO_PAD
+        .decode(prepared["commitment"].as_str().unwrap())
+        .unwrap();
+    let mut account = vec![0u8; passport_registry::REGISTRY_LEN];
+    passport_registry::Registry::initialize(&mut account, [1; 32], 255).unwrap();
+    passport_registry::Registry::insert(&mut account, &[0; 32]).unwrap();
+    passport_registry::Registry::insert(&mut account, &commitment.clone().try_into().unwrap())
+        .unwrap();
+    let account = c(&STANDARD.encode(&account));
+    let state = take(unsafe { passport_registry_state(account.as_ptr()) });
+    assert_eq!(state["enrolled"], 2, "{state}");
+
+    // Its logs, with a look-alike line from another program.
+    let line = |i: u32, leaf: &[u8]| {
+        format!(
+            "Program data: {} {} {}",
+            STANDARD.encode(b"enrolled"),
+            STANDARD.encode(i.to_le_bytes()),
+            STANDARD.encode(leaf)
+        )
+    };
+    let other = "Other11111111111111111111111111111111111111";
+    let logs = serde_json::json!([
+        [
+            format!("Program {program} invoke [1]"),
+            line(1, &commitment),
+            format!("Program {program} success")
+        ],
+        [
+            format!("Program {other} invoke [1]"),
+            line(1, &[9; 32]),
+            format!("Program {other} success")
+        ],
+        [
+            format!("Program {program} invoke [1]"),
+            line(0, &[0; 32]),
+            format!("Program {program} success")
+        ],
+    ]);
+    let logs = c(&logs.to_string());
+    let found = take(unsafe { passport_registry_enrollments(logs.as_ptr(), program_c.as_ptr()) });
+    let mut found: Vec<(u64, String)> = found["enrollments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["index"].as_u64().unwrap(),
+                e["commitment"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    found.sort();
+    assert_eq!(found.len(), 2, "the look-alike is not ours");
+    let leaves: Vec<String> = found.into_iter().map(|e| e.1).collect();
+
+    // A claim proof against it.
+    let dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../circuits/claim/target/xark/passport_claim\0"
+    );
+    let loaded = take(unsafe { passport_prover_load(dir.as_ptr().cast()) });
+    assert_eq!(loaded["ok"], true, "{loaded}");
+    let request = c(&serde_json::json!({
+        "client_id": "redirect_uri:https://bar.example/cb",
+        "nonce": "n-1",
+        "response_uri": "https://bar.example/cb",
+        "credential_id": "q",
+        "claims": [{ "path": ["age_equal_or_over", "18"] }],
+    })
+    .to_string());
+    let registry =
+        |roots: &Value| {
+            c(&serde_json::json!({ "program_id": program, "leaves": leaves, "recent_roots": roots })
+            .to_string())
+        };
+    let now = 1_793_361_600i64;
+    let prove = |registry: &CString| {
+        take(unsafe {
+            passport_prove_enrolled(
+                request.as_ptr(),
+                dg1.as_ptr(),
+                dg15.as_ptr(),
+                sod.as_ptr(),
+                secret.as_ptr(),
+                registry.as_ptr(),
+                now,
+            )
+        })
+    };
+    // A stale view of the registry: its root is not one the account knows.
+    let stale = prove(&registry(&serde_json::json!([state["recent_roots"][2]])));
+    assert!(stale["error"].as_str().unwrap().contains("sync"), "{stale}");
+    let proved = prove(&registry(&state["recent_roots"]));
+    assert_eq!(proved["ok"], true, "{proved}");
+    assert_eq!(proved["index"], 1);
+
+    let vk = std::fs::read(format!("{}/vk.bin", dir.trim_end_matches('\0')))
+        .ok()
+        .and_then(|b| passport_attest::prover::read_verifying_key(&b).ok())
+        .expect("vk.bin");
+    let roots = fields(&state["recent_roots"]).unwrap();
+    let issuer = passport_attest::token::registry_issuer(program);
+    let expect = passport_attest::token::Expectations {
+        issuer: &issuer,
+        audience: "redirect_uri:https://bar.example/cb",
+        holder: "nonce:n-1",
+        now: now + 1,
+        claims: &[passport_attest::claims::Claim::AgeOver(18)],
+        roots: passport_attest::token::Roots::Trusted(&roots),
+    };
+    let verified =
+        passport_attest::token::verify_token(proved["token"].as_str().unwrap(), &vk, &expect)
+            .unwrap();
+    assert_eq!(
+        verified.payload["verified_claims"]["verification"]["evidence"][0]["method"],
+        "zk_enrolled"
+    );
+}

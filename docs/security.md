@@ -61,11 +61,18 @@ the registry program verified a `passport_enroll` proof:
 
 ## What is not covered yet
 
-- **The app enrolls into a local tree.** Its tokens carry `iss =
-  dev:local-registry` and evidence method `zk_dev`: the MRZ was read from a
-  chip with BAC, but nothing checked the SOD. Verifiers must only accept them
-  with `Roots::AnyDevelopment`, which `verify_token` only allows for the
-  development issuer.
+- **Unverified documents.** Until a passport is enrolled on-chain the app
+  proves against a one-leaf tree of its own: `iss = dev:local-registry`,
+  evidence `zk_dev`. Verifiers must only accept those with
+  `Roots::AnyDevelopment`, which `verify_token` only allows for the
+  development issuer. Once enrolled, tokens say `solana:<program id>` and
+  `zk_enrolled`, and verifiers check them against the registry account's
+  recent roots (`examples/relying_party.rs` with `REGISTRY_PROGRAM_ID`).
+- **The app trusts its registry sync for liveness, not soundness.** It
+  rebuilds the commitment tree from the enrollment logs of one RPC endpoint,
+  counting only lines the registry program itself emitted, and refuses to
+  prove unless the tree's root is one the account holds. A lying endpoint
+  can make it fail, not make it prove against a forged tree.
 - **Request signatures.** The wallet answers only unsigned `redirect_uri:`
   requests, whose audience is the response URI; it names the relying party
   by that host, not by the `client_name` the request gives itself. Verifiers

@@ -100,6 +100,25 @@ enroll-artifacts:
     xark setup crates/circuits/enroll --insecure-dev-mode --deterministic-rng 1 --cache
     cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/enroll/target/xark/passport_enroll
 
+# manifest.json for the enrollment artifacts the iOS app downloads: host the
+# directory's circuit.xbc, matrices.bin, pk.bin and this manifest at the URL
+# set as PassportRegistry.Artifacts in clients/ios/Config/Info.plist.
+enroll-manifest dir="crates/circuits/enroll/target/xark/passport_enroll":
+    #!/bin/sh
+    set -eu
+    cd {{dir}}
+    sep=""
+    {
+        printf '{"files":['
+        for f in circuit.xbc matrices.bin pk.bin; do
+            printf '%s\n {"name":"%s","sha256":"%s","bytes":%s}' "$sep" "$f" \
+                "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(wc -c < "$f" | tr -d ' ')"
+            sep=","
+        done
+        printf '\n]}\n'
+    } > manifest.json
+    cat manifest.json
+
 # The multi-party setup of a circuit (see crates/ceremony): `just ceremony init
 # phase1.ptau crates/circuits/enroll/target/xark/passport_enroll 0000.params`, then
 # `contribute`, `beacon`, `verify`, `export`.

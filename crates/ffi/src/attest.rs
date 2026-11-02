@@ -24,7 +24,7 @@ use passport_attest::document::{Date, Document};
 use passport_attest::oid4vp::{self, AuthorizationRequest, Link};
 use passport_attest::prover::{Prover, key_id};
 use passport_attest::registry::Tree;
-use passport_attest::token::{Enrollment, Request, field_b64, issue};
+use passport_attest::token::{Enrollment, Request, field_b64, issue, registry_issuer};
 use passport_attest::{Error, Fr};
 use serde_json::{Value, json};
 
@@ -32,11 +32,11 @@ use crate::{give, text};
 
 static PROVER: Mutex<Option<Prover>> = Mutex::new(None);
 
-fn error(e: &Error) -> Value {
+pub(crate) fn error(e: &Error) -> Value {
     json!({ "ok": false, "error": e.to_string(), "unsupported": matches!(e, Error::Unsupported(_)) })
 }
 
-fn hex_bytes(hex: &str) -> Result<Vec<u8>, Error> {
+pub(crate) fn hex_bytes(hex: &str) -> Result<Vec<u8>, Error> {
     if !hex.len().is_multiple_of(2) {
         return Err(Error::Document("odd-length hex".into()));
     }
@@ -167,22 +167,29 @@ pub unsafe extern "C" fn passport_prover_load(dir: *const c_char) -> *mut c_char
     })
 }
 
-/// What enrollment binds: the document and the holder's secret. DG15 and the
-/// DSC leaf stay zero until the reader does active and passive authentication.
-fn enrollment(dg1_hex: &str, secret_hex: &str) -> Result<Enrollment, Error> {
+/// The holder secret: 32 bytes of hex.
+pub(crate) fn secret(secret_hex: &str) -> Result<Fr, Error> {
     let secret = hex_bytes(secret_hex)?;
     if secret.len() != 32 {
         return Err(Error::Document("the secret must be 32 bytes".into()));
     }
+    Ok(Fr::from_be_bytes_mod_order(&secret))
+}
+
+/// What a development enrollment binds: the document and the holder's
+/// secret, DG15 and the DSC leaf zero (no chip checks behind it).
+fn enrollment(dg1_hex: &str, secret_hex: &str) -> Result<Enrollment, Error> {
     Ok(Enrollment {
-        secret: Fr::from_be_bytes_mod_order(&secret),
+        secret: secret(secret_hex)?,
         document: Document::from_dg1(&hex_bytes(dg1_hex)?)?,
         dg15_hash: Fr::from(0u8),
         dsc_leaf: Fr::from(0u8),
     })
 }
 
-/// Enroll a document in the development registry: its commitment and the root.
+/// Enroll a document in a development tree of its own: its commitment and
+/// the root. Proofs against it are `zk_dev`; see [`crate::enroll`] for the
+/// registry.
 ///
 /// # Safety
 /// Both strings are null or NUL-terminated.
@@ -300,6 +307,92 @@ pub unsafe extern "C" fn passport_prove(
             "token": token,
             "body": oid4vp::response_body(&request, &token),
             "kid": key_id(prover.verifying_key()),
+            "millis": started.elapsed().as_millis() as u64,
+        }))
+    };
+    give(run().unwrap_or_else(|e| error(&e)))
+}
+
+/// Prove the request against the on-chain registry: the claim proof names
+/// it as issuer (`solana:<program id>`) and its evidence `zk_enrolled`.
+///
+/// `registry_json` is `{"program_id":"…","leaves":[…],"recent_roots":[…]}`:
+/// the commitment tree's leaves in index order (from the enrollment logs)
+/// and the account's recent roots. The tree they make must have one of
+/// those roots, so a wrong or stale list fails here, not at the verifier.
+///
+/// # Safety
+/// The strings are null or NUL-terminated. Blocks for the proof.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn passport_prove_enrolled(
+    request: *const c_char,
+    dg1_hex: *const c_char,
+    dg15_hex: *const c_char,
+    sod_hex: *const c_char,
+    secret_hex: *const c_char,
+    registry_json: *const c_char,
+    now: i64,
+) -> *mut c_char {
+    // SAFETY: guaranteed by the caller.
+    let (request, dg1, dg15, sod, s, registry) = unsafe {
+        (
+            text(request),
+            text(dg1_hex),
+            text(dg15_hex),
+            text(sod_hex),
+            text(secret_hex),
+            text(registry_json),
+        )
+    };
+    let run = || -> Result<Value, Error> {
+        let request = request_from_json(request)?;
+        let files = crate::enroll::Files::parse(dg1, dg15, sod)?;
+        let enrollment =
+            passport_attest::enroll::prepare(secret(s)?, &files.passport())?.enrollment;
+        let registry: Value = serde_json::from_str(registry)
+            .map_err(|_| Error::Request("the registry is not JSON".into()))?;
+        let program_id = registry["program_id"]
+            .as_str()
+            .ok_or_else(|| Error::Request("program_id is missing".into()))?;
+        crate::enroll::address(program_id)?;
+        let tree = Tree::new(crate::enroll::fields(&registry["leaves"])?);
+        let commitment = enrollment.commitment();
+        let index = tree
+            .leaves()
+            .iter()
+            .position(|l| *l == commitment)
+            .ok_or_else(|| Error::Document("this passport is not in the registry yet".into()))?;
+        if !crate::enroll::fields(&registry["recent_roots"])?.contains(&tree.root()) {
+            return Err(Error::Document(
+                "the registry has moved on since it was read; sync it again".into(),
+            ));
+        }
+        let guard = PROVER.lock().unwrap_or_else(|p| p.into_inner());
+        let prover = guard
+            .as_ref()
+            .ok_or_else(|| Error::Circuit("prover not loaded".into()))?;
+        let claim_request = Request {
+            issuer: registry_issuer(program_id),
+            claims: request.claims.clone(),
+            audience: request.audience().to_owned(),
+            holder: request.holder(),
+            issued_at: now,
+        };
+        let started = std::time::Instant::now();
+        let token = issue(
+            prover,
+            &claim_request,
+            &enrollment,
+            &tree,
+            index,
+            &mut rand::rngs::OsRng,
+        )?;
+        Ok(json!({
+            "ok": true,
+            "token": token,
+            "body": oid4vp::response_body(&request, &token),
+            "kid": key_id(prover.verifying_key()),
+            "index": index,
             "millis": started.elapsed().as_millis() as u64,
         }))
     };

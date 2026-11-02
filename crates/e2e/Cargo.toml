@@ -30,4 +30,5 @@ solana-transaction-status-client-types = "4"
 # Custom surfnet cheatcodes over RPC (setting the program upgrade authority).
 solana-rpc-client-api = "4"
 serde_json = { workspace = true }
+base64 = "0.22"
 tokio = { workspace = true }

@@ -386,13 +386,17 @@ Where v1 departs from the text above:
 
 What is left:
 
-- **The phone enrolls locally.** The app still builds a one-leaf tree with
-  the development issuer. Enrolling on the phone needs the enroll proving key
-  (200 MB) and its constraint matrices (`matrices.bin`, 246 MB), about 1.8 GB
-  while proving (`crates/prover` proves from compact matrices instead of
-  re-synthesizing the circuit, which peaked near 8 GB), and a relayer to
-  submit the transaction. Until then the app's tokens say `zk_dev`, and
-  verifiers must not accept them as passports.
+- **Enrollment from the phone, deployed.** The app reads EF.SOD and DG15
+  and has the chip sign the enrollment challenge in the same NFC session,
+  reports compatibility check by check (`passport_attest::compat`), then
+  downloads the enrollment circuit (`just enroll-manifest`: 450 MB, checked
+  by hash), proves on the phone (about 1.8 GB, with the
+  `increased-memory-limit` entitlement and an `os_proc_available_memory`
+  check first) and builds an unsigned transaction a Kora relayer signs as fee
+  payer, so no wallet of the holder's appears on-chain. Left: deploy the
+  registry, publish the DSC list (`{"leaves":[…]}`) and run Kora; the build
+  points at them through `PassportRegistry` in `Info.plist`. Background
+  Assets would let the download survive the app being closed.
 - **More document profiles**: ECDSA and RSA-PSS Document Signers, RSA-3072
   and 4096, SHA-1 and SHA-384 LDS hashes, ECDSA Active Authentication, and
   documents without AA (Chip Authentication cannot be proven to a third

@@ -25,6 +25,6 @@ solana-define-syscall = "3"
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 light-poseidon = "0.4"
 # PDA derivation off-chain (on-chain it is a syscall).
-solana-address = { version = "2", features = ["curve25519"] }
+solana-address = { version = "2", features = ["curve25519", "decode"] }
 ark-bn254-05 = { package = "ark-bn254", version = "0.5" }
 ark-ff-05 = { package = "ark-ff", version = "0.5" }

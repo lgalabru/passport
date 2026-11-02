@@ -37,3 +37,6 @@ light-poseidon = "0.4"
 ark-bn254-05 = { package = "ark-bn254", version = "0.5" }
 passport-pki = { workspace = true, features = ["fixtures"] }
 ark-ff-05 = { package = "ark-ff", version = "0.5" }
+# The relying party example: the registry account over Solana JSON-RPC.
+passport-registry = { path = "../programs/registry" }
+ureq = { version = "3", features = ["json"] }

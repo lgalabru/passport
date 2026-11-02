@@ -4,6 +4,7 @@
 //! | Module | Role |
 //! |---|---|
 //! | [`claims`] | The claim vocabulary, its selector bits, payload rendering. |
+//! | [`compat`] | Whether a read passport can enroll, check by check. |
 //! | [`document`] | The MRZ as the circuit reads it; the date rules. |
 //! | [`enroll`] | The enrollment witness: a read passport as `passport_enroll` inputs. |
 //! | [`registry`] | The commitment tree (a local development stand-in). |
@@ -13,6 +14,7 @@
 //! | [`oid4vp`] | OpenID4VP requests in, `direct_post` responses out. |
 
 pub mod claims;
+pub mod compat;
 pub mod document;
 pub mod enroll;
 pub mod oid4vp;

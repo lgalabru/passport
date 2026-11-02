@@ -22,10 +22,7 @@
 #![cfg_attr(target_os = "solana", no_std)]
 
 use pinocchio::cpi::Seed;
-use pinocchio::{
-    AccountView, Address, ProgramResult, error::ProgramError, no_allocator, nostd_panic_handler,
-    program_entrypoint,
-};
+use pinocchio::{AccountView, Address, ProgramResult, error::ProgramError};
 
 #[cfg(not(target_os = "solana"))]
 pub mod client;
@@ -81,9 +78,14 @@ fn fail(code: u32) -> ProgramError {
     ProgramError::Custom(code)
 }
 
-program_entrypoint!(process_instruction);
-no_allocator!();
-nostd_panic_handler!();
+// Only the program exports an entrypoint; off-chain builds (the iOS core,
+// host tests) link the client and the state layout without it.
+#[cfg(target_os = "solana")]
+pinocchio::program_entrypoint!(process_instruction);
+#[cfg(target_os = "solana")]
+pinocchio::no_allocator!();
+#[cfg(target_os = "solana")]
+pinocchio::nostd_panic_handler!();
 
 pub fn process_instruction(
     program_id: &Address,

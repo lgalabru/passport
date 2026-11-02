@@ -85,6 +85,36 @@ fn send(client: &RpcClient, payer: &Keypair, ix: Instruction) -> Result<String, 
         .map_err(|e| e.to_string())
 }
 
+/// What a relayer (Kora) does with the app's unsigned transaction: sign its
+/// one signature slot as fee payer and send it.
+fn relay(client: &RpcClient, relayer: &Keypair, unsigned: &[u8]) -> Result<String, String> {
+    use base64::Engine;
+    use solana_rpc_client_api::request::RpcRequest;
+    let mut tx = unsigned.to_vec();
+    let signature = relayer.sign_message(&tx[65..]);
+    tx[1..65].copy_from_slice(signature.as_ref());
+    let sig: String = client
+        .send(
+            RpcRequest::SendTransaction,
+            serde_json::json!([
+                base64::engine::general_purpose::STANDARD.encode(&tx),
+                { "encoding": "base64", "preflightCommitment": "confirmed" }
+            ]),
+        )
+        .map_err(|e| e.to_string())?;
+    let parsed = sig.parse().map_err(|_| "bad signature".to_string())?;
+    for _ in 0..100 {
+        if let Some(status) = client
+            .get_signature_status(&parsed)
+            .map_err(|e| e.to_string())?
+        {
+            return status.map(|()| sig).map_err(|e| e.to_string());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err("not confirmed".into())
+}
+
 fn transfer(from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
     let mut data = vec![2, 0, 0, 0];
     data.extend_from_slice(&lamports.to_le_bytes());
@@ -239,7 +269,29 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
     )
     .expect("fund the nullifier PDA");
 
-    let sig = send(&client, payer, enroll_ix(&wire, be(public.dsc_root))).expect("enroll");
+    // The app's way: an unsigned transaction a relayer pays for. The holder
+    // never signs; the relayer is neither the authority nor the holder.
+    let relayer = Keypair::new();
+    client
+        .request_airdrop(&relayer.pubkey(), 1_000_000_000)
+        .unwrap();
+    wait_for_balance(&client, &relayer.pubkey());
+    let unsigned = |blockhash: [u8; 32]| {
+        client::enroll_transaction(
+            &program,
+            &client::Address::new_from_array(relayer.pubkey().to_bytes()),
+            &blockhash,
+            &client::enroll_data(
+                &wire,
+                &be(public.dsc_root),
+                &be(public.commitment),
+                &nullifier,
+            ),
+            &nullifier,
+        )
+    };
+    let blockhash = client.get_latest_blockhash().unwrap().to_bytes();
+    let sig = relay(&client, &relayer, &unsigned(blockhash)).expect("enroll");
     // Once per document.
     send(&client, payer, enroll_ix(&wire, be(public.dsc_root))).expect_err("enrolled twice");
 
@@ -250,10 +302,9 @@ async fn a_passport_enrolls_on_chain_and_proves_a_claim_against_its_root() {
     let OptionSerializer::Some(logs) = tx.transaction.meta.unwrap().log_messages else {
         panic!("no logs")
     };
-    let (index, leaf) = logs
-        .iter()
-        .find_map(|l| client::parse_enrollment_log(l))
-        .expect("enrollment log");
+    let enrollments = client::enrollments_in_logs(&logs, &program);
+    let leaves = client::leaves(&enrollments).expect("every index");
+    let (index, leaf) = (enrollments[0].0, leaves[0]);
     assert_eq!((index, fr(&leaf)), (0, public.commitment));
 
     let state = client::read_state(&client.get_account_data(&registry).unwrap()).unwrap();
