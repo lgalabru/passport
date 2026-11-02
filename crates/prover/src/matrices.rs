@@ -336,8 +336,10 @@ impl<'a> Reader<'a> {
     fn u32s(&mut self, n: usize) -> Result<Vec<u32>> {
         let raw = self.take(n.checked_mul(4).ok_or_else(|| bad("truncated"))?)?;
         Ok(raw
-            .chunks_exact(4)
-            .map(|c| u32::from_le_bytes(c.try_into().expect("4")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| u32::from_le_bytes(*c))
             .collect())
     }
 }
