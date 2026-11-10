@@ -349,13 +349,13 @@ each piece proves and what is still trusted.
 
 | Step | State |
 |---|---|
-| 1. Claim circuit | Done: `crates/circuits/claim` (13.5k constraints), proving on an iPhone in about 0.2 s. |
+| 1. Claim circuit | Done: `crates/circuits/claim` (7.5k constraints), proving on an iPhone in about 0.2 s. |
 | 2. SAS verifier program | Not started. |
 | 3. Claim proof format and verification | Done: `crates/attest`. Verifiers must name the issuer, the claims asked for (proven exactly, all true), trusted roots and their clock; `iat` must be fresh. |
 | 4. SOD, DG15, Active Authentication | Done in the reader (`ReadTarget::Sod`, `active_authenticate`) and natively in `crates/pki` (Passive Authentication to trusted CSCAs, ISO 9796-2). |
 | 5. circomlib Poseidon | Done: the gadget and native hash equal `sol_poseidon`. |
 | 6. RSA-2048 | Done: 24-limb bignum on the `lgalabru/xark` fork (`passport` branch); PKCS#1 v1.5 / SHA-256 in 206k constraints. |
-| 7. Enroll circuit | Done: `crates/circuits/enroll` (1.1M constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree for the MRZ's issuing state, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 5.5 s with a 1.8 GB peak on an M-series Mac (`crates/prover`). |
+| 7. Enroll circuit | Done: `crates/circuits/enroll` (664k constraints): DG1 and DG15 bound by the SOD, the SOD signed by a DSC in the trusted tree for the MRZ's issuing state, AA over a challenge derived from the commitment. Passes xark's under-constraint analysis; proves in about 1.4 s with a 1.3 GB peak on an M-series Mac (`crates/prover`). |
 | 8. Registry program | Done: `crates/programs/registry` (trusted DSC roots, enrollment proofs, one enrollment per chip, the commitment tree on `sol_poseidon`, recent roots). Only the program's upgrade authority can initialize it, and lamports sent to a PDA ahead of time cannot block it. The publisher's DSC tree comes from `enroll::dsc_tree`, which checks each DSC's chain, roles (keyUsage, basicConstraints, not a Master List Signer) and dates. |
 | 9. Ceremony and audits | The ceremony tool is done (`crates/ceremony`; it accepts a phase 1 only by a hash it knows or the operator gives); the ceremony itself and the audits are not. |
 
@@ -389,8 +389,8 @@ What is left:
 - **Enrollment from the phone, deployed.** The app reads EF.SOD and DG15
   and has the chip sign the enrollment challenge in the same NFC session,
   reports compatibility check by check (`passport_attest::compat`), then
-  downloads the enrollment circuit (`just enroll-manifest`: 450 MB, checked
-  by hash), proves on the phone (about 1.8 GB, with the
+  downloads the enrollment circuit (`just enroll-manifest`: 190 MB, checked
+  by hash), proves on the phone (about 1.3 GB, with the
   `increased-memory-limit` entitlement and an `os_proc_available_memory`
   check first) and builds an unsigned transaction a Kora relayer signs as fee
   payer, so no wallet of the holder's appears on-chain. Left: deploy the

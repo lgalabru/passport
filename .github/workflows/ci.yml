@@ -70,9 +70,8 @@ jobs:
           xark build crates/circuits/claim
           xark setup crates/circuits/claim --deterministic-rng 1 --domain radix2
           cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/claim/target/xark/passport_claim
-      # The enrollment circuit is checked through its native validator; its
-      # Groth16 setup needs about 16 GB, so real enrollment proofs run
-      # locally (`just enroll-artifacts enroll-proof e2e`).
+      # The enrollment circuit is checked through its native validator; real
+      # enrollment proofs run locally (`just enroll-artifacts enroll-proof e2e`).
       - name: Build passport_rsa2048 and passport_enroll
         run: |
           xark build crates/circuits/rsa2048

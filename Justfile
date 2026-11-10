@@ -94,11 +94,12 @@ claim-artifacts:
     cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/claim/target/xark/passport_claim
 
 # Build the passport_enroll circuit and its dev-mode keys (NOT for production;
-# setup peaks at about 16 GB of memory).
+# setup takes a few seconds and about 3 GB).
 enroll-artifacts:
     xark build crates/circuits/enroll
     xark setup crates/circuits/enroll --deterministic-rng 1 --domain radix2
     cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/enroll/target/xark/passport_enroll
+    cargo run --release -q -p passport-attest --example solana_vk -- crates/circuits/enroll/target/xark/passport_enroll/vk.bin crates/programs/registry/fixtures/enroll_vk.solana.bin
 
 # manifest.json for the enrollment artifacts the iOS app downloads: host the
 # directory's circuit.xbc, matrices.bin, pk.bin and this manifest at the URL
