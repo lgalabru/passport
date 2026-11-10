@@ -11,9 +11,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # The pinned xark toolchain; keep in step with the xark rev in Cargo.toml.
-  XARK_REV: 74817fa
-  XARK_NIGHTLY: nightly-2026-05-03
+  # The pinned xark release; keep in step with the xark tag in Cargo.toml.
+  XARK_TAG: v0.3.0
 
 jobs:
   rust:
@@ -55,28 +54,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.XARK_NIGHTLY }}
-          components: rust-src, rustc-dev, llvm-tools
       - uses: Swatinem/rust-cache@v2
       - name: Cache the xark binaries
         id: xark-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/xark
-            ~/.cargo/bin/xark-rustc
-          key: xark-${{ env.XARK_REV }}-${{ env.XARK_NIGHTLY }}-${{ runner.os }}
+          path: ~/.cargo/bin/xark
+          key: xark-${{ env.XARK_TAG }}-${{ runner.os }}
       - name: Install xark
         if: steps.xark-cache.outputs.cache-hit != 'true'
         run: |
-          cargo +${{ env.XARK_NIGHTLY }} install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-rustc
-          cargo install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-cli
+          cargo install --locked --git https://github.com/blueshift-gg/xark --tag ${{ env.XARK_TAG }} xark-cli
       - name: Build passport_claim and its dev keys
         run: |
           xark build crates/circuits/claim
-          xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+          xark setup crates/circuits/claim --deterministic-rng 1 --domain radix2
           cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/claim/target/xark/passport_claim
       # The enrollment circuit is checked through its native validator; its
       # Groth16 setup needs about 16 GB, so real enrollment proofs run

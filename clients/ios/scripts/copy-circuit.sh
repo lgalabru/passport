@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copies the passport_claim circuit artifacts (xark build, xark setup --cache,
+# Copies the passport_claim circuit artifacts (xark build, xark setup,
 # passport-matrices)
 # into the app bundle's Circuit/ folder, where the prover loads them.
 # Produce them with `just claim-artifacts`.

@@ -39,7 +39,7 @@ the registry program verified a `passport_enroll` proof:
 ## What it rests on
 
 - **The verifying keys.** Today's keys come from a fixed seed
-  (`--insecure-dev-mode`): anyone can forge proofs. Real keys come from the
+  (`xark setup --deterministic-rng`): anyone can forge proofs. Real keys come from the
   ceremony in `crates/ceremony`, and are sound if one participant destroyed
   their contribution and nobody knows phase 1's `τ`. No check can show the
   latter, so the tool only takes a phase 1 file by a hash it knows (the

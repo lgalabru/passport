@@ -7,13 +7,6 @@
 //! `hash` is xark's sponge (capacity seeded with the input count, rate 2)
 //! over that permutation.
 //!
-//! The lowering is what is particular here. In a partial round only `state[0]` goes
-//! through the S-box, so `state[1]` and `state[2]` stay linear combinations
-//! that grow by a term per round when nothing pins them. Each partial round
-//! here copies them into fresh variables (a hint plus an equality), which keeps
-//! every linear combination at three terms. That shrinks the circuit artifact
-//! and makes witness solving fast enough for a phone, at the price of two
-//! linear constraints per partial round, which Groth16 minimization folds away.
 #![no_std]
 // The xark subset has no compound assignment on `Field`.
 #![allow(clippy::assign_op_pattern)]
@@ -120,14 +113,6 @@ fn mds(state: [Field; T]) -> [Field; T] {
     ]
 }
 
-/// `x` as a fresh variable: a witness hint pinned equal to `x`.
-fn pin(x: Field) -> Field {
-    let [copy, rest] = Field::hint_div_rem(x, Field::from(1u8));
-    require_eq(copy, x);
-    require_eq(rest, Field::from(0u8));
-    copy
-}
-
 fn full_round(state: [Field; T], rc: [Field; T]) -> [Field; T] {
     let mut s = state;
     let mut i = 0usize;
@@ -144,8 +129,7 @@ fn partial_round(state: [Field; T], rc: [Field; T]) -> [Field; T] {
         state[1] + rc[1],
         state[2] + rc[2],
     ];
-    let out = mds(s);
-    [out[0], pin(out[1]), pin(out[2])]
+    mds(s)
 }
 
 pub fn permute(state: [Field; T]) -> [Field; T] {

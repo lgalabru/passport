@@ -1,13 +1,10 @@
 //! Groth16 proofs of xark circuits from compact constraint matrices.
 //!
-//! `xark prove` (and `xark_prover::XarkCircuit`) hands the whole minimized
-//! R1CS to arkworks on every proof: the program is cloned, synthesized into a
-//! `ConstraintSystem`, inlined and turned into matrices, several copies of
-//! some 40M terms. For the enroll circuit that peaks near 8 GB.
-//!
-//! Here that work happens once, offline: [`Matrices::build`] runs the same
-//! synthesis (so the matrices are exactly the ones the proving key was made
-//! for) and keeps only what a prover needs:
+//! xark's streaming prover expands the circuit's rows from `circuit.xbc` (or
+//! the `r1cs.stream` beside a minimized key) on every proof. Here that work
+//! happens once, offline: [`Matrices::build`] expands the same rows (so the
+//! matrices are exactly the ones the proving key was made for) and keeps only
+//! what a prover needs:
 //!
 //! - the variable order of the assignment, `[1, public…, witness…]`;
 //! - `A` and `B` in compressed sparse rows, a column and an index into a
@@ -18,10 +15,11 @@
 //! libsnark reduction), and the proof, with the proving key xark wrote.
 
 pub mod groth16;
+pub mod keys;
 pub mod matrices;
 
 pub use groth16::{assignment, prove, quotient};
-pub use matrices::{Csr, Matrices};
+pub use matrices::{Csr, Matrices, constraint_source};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

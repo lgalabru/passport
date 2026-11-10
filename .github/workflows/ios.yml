@@ -17,8 +17,7 @@ jobs:
     name: Build for the simulator
     runs-on: ${{ inputs.runner }}
     env:
-      XARK_REV: 74817fa
-      XARK_NIGHTLY: nightly-2026-05-03
+      XARK_TAG: v0.3.0
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -32,19 +31,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.XARK_NIGHTLY }}
-          components: rust-src, rustc-dev, llvm-tools
       - uses: Swatinem/rust-cache@v2
       - name: Install xark
         run: |
-          cargo +${{ env.XARK_NIGHTLY }} install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-rustc
-          cargo install --locked --git https://github.com/blueshift-gg/xark --rev ${{ env.XARK_REV }} xark-cli
+          cargo install --locked --git https://github.com/blueshift-gg/xark --tag ${{ env.XARK_TAG }} xark-cli
       - name: Build passport_claim and its dev keys
         run: |
           xark build crates/circuits/claim
-          xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+          xark setup crates/circuits/claim --deterministic-rng 1 --domain radix2
       - name: Build the app
         run: >
           xcodebuild -project clients/ios/Passport.xcodeproj -scheme Passport

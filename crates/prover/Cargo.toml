@@ -14,12 +14,13 @@ workspace = true
 [dependencies]
 xark-prover = { workspace = true }
 xark-ir = { workspace = true }
+xark-groth16 = { workspace = true }
+xark-backend = { workspace = true }
 ark-bn254 = "0.6"
 ark-ec = "0.6"
 ark-ff = "0.6"
 ark-groth16 = "0.6"
 ark-poly = "0.6"
-ark-relations = "0.6"
 ark-std = "0.6"
 rand = "0.8"
 rayon = "1"
@@ -30,4 +31,3 @@ thiserror = { workspace = true }
 # The claim circuit's witness, for checking against the arkworks prover.
 passport-attest = { workspace = true }
 ark-snark = "0.6"
-xark-backend = { workspace = true }

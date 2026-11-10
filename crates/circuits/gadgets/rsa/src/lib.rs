@@ -76,10 +76,10 @@ pub fn modexp_65537<const LIMBS: usize>(s: [Field; LIMBS], m: Modulus<LIMBS>) ->
     let mut x = s;
     let mut i = 0usize;
     while i < 16usize {
-        x = mod_mul::<LIMBS, 86>(x, x, m.n, m.n_minus_1);
+        x = mod_mul::<LIMBS, 86>(x, x, m.n);
         i += 1;
     }
-    mod_mul::<LIMBS, 86>(x, s, m.n, m.n_minus_1)
+    mod_mul::<LIMBS, 86>(x, s, m.n)
 }
 
 /// A canonical 12-limb value (`< 2^1024`) as 128 big-endian bytes.

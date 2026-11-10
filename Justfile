@@ -47,7 +47,7 @@ flipper-build:
 flipper-install port="": flipper-build
     storage {{ if port == "" { "" } else { "--port " + port } }} send dist/passport.fap /ext/apps/NFC/passport.fap
 
-# Compile the ZK circuits with xark (needs `xark` + `xark-rustc`, see README, Circuits).
+# Compile the ZK circuits with xark (needs `xark`, see README, Circuits).
 # Artifacts land in each crate's target/xark/<name>/. The circuit tests build on demand,
 # so this is only needed to inspect constraint counts or produce proving keys.
 circuits-build:
@@ -64,9 +64,9 @@ circuits-build:
 aa-artifacts:
     xark build crates/circuits/aa
     cargo run -q -p passport_aa --example inputs > crates/circuits/aa/target/xark/inputs.txt
-    xark setup crates/circuits/aa --insecure-dev-mode --deterministic-rng 1
+    xark setup crates/circuits/aa --deterministic-rng 1 --domain radix2
     xark prove crates/circuits/aa --inputs crates/circuits/aa/target/xark/inputs.txt
-    xark export crates/circuits/aa --allow-insecure --out crates/circuits/aa/target/xark/verifier
+    xark export crates/circuits/aa --out crates/circuits/aa/target/xark/verifier
     cp crates/circuits/aa/target/xark/verifier/verifying_key.solana.bin crates/programs/aa-verifier/fixtures/
     cp crates/circuits/aa/target/xark/verifier/instruction_data.bin crates/programs/aa-verifier/fixtures/
 
@@ -90,14 +90,14 @@ ci: fmt lint test check-no-std
 # with the minimized-R1CS cache the prover loads. Needed by passport-attest tests and the iOS app.
 claim-artifacts:
     xark build crates/circuits/claim
-    xark setup crates/circuits/claim --insecure-dev-mode --deterministic-rng 1 --cache
+    xark setup crates/circuits/claim --deterministic-rng 1 --domain radix2
     cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/claim/target/xark/passport_claim
 
 # Build the passport_enroll circuit and its dev-mode keys (NOT for production;
 # setup peaks at about 16 GB of memory).
 enroll-artifacts:
     xark build crates/circuits/enroll
-    xark setup crates/circuits/enroll --insecure-dev-mode --deterministic-rng 1 --cache
+    xark setup crates/circuits/enroll --deterministic-rng 1 --domain radix2
     cargo run --release -q -p passport-prover --bin passport-matrices -- crates/circuits/enroll/target/xark/passport_enroll
 
 # manifest.json for the enrollment artifacts the iOS app downloads: host the

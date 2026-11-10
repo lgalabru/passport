@@ -25,7 +25,7 @@ where other programs can condition on it.
 > [!WARNING]
 > **Experimental research code. Do not use it for anything real.**
 > Nothing here has been audited. The proving keys come from
-> `xark setup --insecure-dev-mode`, and there is no shared registry yet:
+> `xark setup --deterministic-rng`, and there is no shared registry yet:
 > each phone keeps its own, so a proof today only shows that the claims hold
 > for a document enrolled on that phone, not that a state issued it.
 > Request-object signatures are not checked. Formats, circuits and APIs will
@@ -189,14 +189,11 @@ just coverage    # line coverage, needs cargo-llvm-cov; target is 80%
 ### Circuits
 
 Circuit crates compile and test through the `xark` CLI, pinned to the same
-commit as the `xark` crates in `Cargo.toml`:
+version as the `xark` crates in `Cargo.toml`. It needs only stable Rust (1.89
+or later) and the `wasm32-unknown-unknown` target, which it adds on first use:
 
 ```sh
-rustup toolchain install nightly-2026-05-03 --profile minimal \
-  --component rust-src --component rustc-dev --component llvm-tools
-git clone https://github.com/blueshift-gg/xark && cd xark && git checkout 74817fa
-cargo +nightly-2026-05-03 install --path crates/rustc --locked
-cargo install --path crates/cli --locked
+cargo install --locked --git https://github.com/blueshift-gg/xark --tag v0.3.0 xark-cli
 ```
 
 `cargo test -p passport_aa` (or any circuit crate) builds the circuit on
@@ -219,8 +216,10 @@ just aa-artifacts   # regenerate dev keys, proof and fixtures after a circuit ch
 just e2e
 ```
 
-The keys come from `xark setup --insecure-dev-mode --deterministic-rng 1`, so
-the fixtures are reproducible and must never be deployed anywhere real.
+The keys come from `xark setup --deterministic-rng 1 --domain radix2`, so
+the fixtures are reproducible and must never be deployed anywhere real. The
+`radix2` domain is what the passport prover's arkworks FFTs expect; xark's own
+prover also takes the smaller `smooth` domains it picks by default.
 
 ### CI
 

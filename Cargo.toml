@@ -49,18 +49,19 @@ passport-gadget-sha1 = { version = "0.1.0", path = "crates/circuits/gadgets/sha1
 passport-pki = { version = "0.1.0", path = "crates/pki" }
 passport-prover = { version = "0.1.0", path = "crates/prover" }
 passport-gadget-lds = { version = "0.1.0", path = "crates/circuits/gadgets/lds" }
-xark-sha256 = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+xark-sha256 = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
 passport-gadget-poseidon = { version = "0.1.0", path = "crates/circuits/gadgets/poseidon" }
 passport-gadget-rsa = { version = "0.1.0", path = "crates/circuits/gadgets/rsa" }
-# xark: Rust circuits -> Groth16 (BN254) -> Solana verifier. Pinned to the commit the
-# installed `xark` / `xark-rustc` binaries were built from (see README, Circuits).
-xark = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa", default-features = false }
-xark-bits = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
-xark-bignum = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
-xark-prover = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
-xark-verifier = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
-xark-ir = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
-xark-backend = { git = "https://github.com/blueshift-gg/xark", rev = "74817fa" }
+# xark: Rust circuits -> Groth16 (BN254) -> Solana verifier. Pinned to the release the
+# installed `xark` binary was built from (see README, Circuits).
+xark = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0", default-features = false }
+xark-bits = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-bignum = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-prover = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-verifier = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-ir = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-backend = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
+xark-groth16 = { git = "https://github.com/blueshift-gg/xark", tag = "v0.3.0" }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -114,16 +115,3 @@ opt-level = 3
 [profile.dev.package.rsa]
 opt-level = 3
 
-# RSA-2048 needs 24 bignum limbs; upstream caps at 16 until
-# upstream lifts it; the fork's `passport` branch is 74817fa plus that and
-# a public sha256 `compress`, so the installed xark-rustc (74817fa) matches.
-[patch."https://github.com/blueshift-gg/xark"]
-xark = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-bits = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-bignum = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-prover = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-verifier = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-ir = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-backend = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-macros = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }
-xark-sha256 = { git = "https://github.com/lgalabru/xark", rev = "0a73e7c" }

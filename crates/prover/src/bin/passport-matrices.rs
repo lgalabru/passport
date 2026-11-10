@@ -1,14 +1,15 @@
 //! `passport-matrices <circuit-dir>`: write `<circuit-dir>/matrices.bin` from
-//! `circuit.xbc` and `r1cs.min.wcz` (`xark build`, `xark setup --cache`).
-//! A build step: it synthesizes the circuit once, as setup did.
+//! `circuit.xbc` and, when `xark setup` wrote one, `r1cs.stream` (`xark build`,
+//! `xark setup`). A build step: it expands the rows once, as setup did.
 
 use std::path::Path;
 use std::process::ExitCode;
 
 fn run(dir: &Path) -> Result<String, String> {
     let read = |name: &str| std::fs::read(dir.join(name)).map_err(|e| format!("{name}: {e}"));
-    let m = passport_prover::Matrices::build(&read("circuit.xbc")?, &read("r1cs.min.wcz")?)
-        .map_err(|e| e.to_string())?;
+    let rows = std::fs::read(dir.join("r1cs.stream")).ok();
+    let m =
+        passport_prover::Matrices::build(&read("circuit.xbc")?, rows).map_err(|e| e.to_string())?;
     let bytes = m.write();
     std::fs::write(dir.join("matrices.bin"), &bytes).map_err(|e| e.to_string())?;
     Ok(format!(
@@ -28,7 +29,7 @@ fn main() -> ExitCode {
         eprintln!("usage: passport-matrices <circuit-dir>");
         return ExitCode::FAILURE;
     };
-    // Synthesis recurses deeply: more stack than a main thread's.
+    // Row expansion recurses: more stack than a main thread's.
     let outcome = std::thread::Builder::new()
         .stack_size(1 << 30)
         .spawn(move || run(Path::new(&dir)))

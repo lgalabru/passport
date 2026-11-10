@@ -1,6 +1,6 @@
 [package]
 name = "passport-gadget-poseidon"
-description = "xark gadget: Poseidon (xark-poseidon parameters) with pinned partial-round state, and the registry Merkle fold"
+description = "xark gadget: Poseidon (xark-poseidon parameters) and the registry Merkle fold"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

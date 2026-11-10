@@ -13,7 +13,11 @@ fn main() {
     };
     let vk = passport_attest::prover::read_verifying_key(&std::fs::read(input).expect("read vk"))
         .expect("a Groth16 verifying key");
-    std::fs::write(output, xark_backend::solana::assemble_vk_bytes_le(&vk)).expect("write");
+    std::fs::write(
+        output,
+        xark_backend::solana::assemble_vk_bytes_le(&passport_prover::keys::vk_to_xark(&vk)),
+    )
+    .expect("write");
     eprintln!(
         "{output}: {} public inputs, key id {}",
         vk.gamma_abc_g1.len() - 1,

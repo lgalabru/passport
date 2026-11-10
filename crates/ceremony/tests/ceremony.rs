@@ -206,7 +206,7 @@ fn contributions_verify_and_the_keys_prove() {
         assert_eq!(Params::read(&p.write()).unwrap(), p);
         let dir = std::env::temp_dir().join(format!("ceremony-{}", rand::random::<u64>()));
         p.write_keys(&dir).unwrap();
-        let back = xark_backend::keys::Groth16Keys::read_proving_key(&dir.join("pk.bin")).unwrap();
+        let back = passport_prover::keys::read_proving_key(&dir.join("pk.bin")).unwrap();
         assert_eq!(back, p.pk);
         std::fs::remove_dir_all(dir).ok();
     }

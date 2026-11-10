@@ -392,8 +392,8 @@ impl Params {
             return Err(Error::Verify("no contribution: δ = 1 is public".into()));
         }
         let keys = xark_backend::keys::Groth16Keys {
-            proving_key: self.pk.clone(),
-            verifying_key: self.pk.vk.clone(),
+            proving_key: passport_prover::keys::pk_to_xark(&self.pk),
+            verifying_key: passport_prover::keys::vk_to_xark(&self.pk.vk),
         };
         std::fs::create_dir_all(dir).map_err(|e| Error::Io(e.to_string()))?;
         keys.write_proving_key(&dir.join("pk.bin"))

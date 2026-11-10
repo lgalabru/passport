@@ -14,8 +14,9 @@
 //! or one given with `--ptau-sha256 <hex>`, after comparing that hash with
 //! the published one: a phase 1 whose `τ` someone knows passes every check.
 //!
-//! `<circuit-dir>` holds `circuit.xbc` and `r1cs.min.wcz` (`xark build`,
-//! then `xark setup --cache`, whose dev keys are discarded). A participant
+//! `<circuit-dir>` holds `circuit.xbc` and, if `xark setup` keyed the minimized
+//! circuit, `r1cs.stream` (`xark build`, then `xark setup`, whose dev keys are
+//! discarded). A participant
 //! downloads the latest parameters, runs `contribute`, uploads the result
 //! and publishes the transcript hash it prints. `verify` recomputes the
 //! initial parameters from phase 1 and checks every contribution; `export`
@@ -50,8 +51,8 @@ fn ptau(path: &str, accepted: Option<&str>) -> Result<Ptau, String> {
 fn shape(dir: &str) -> Result<Shape, String> {
     let d = Path::new(dir);
     let xbc = read(&d.join("circuit.xbc").to_string_lossy())?;
-    let cache = read(&d.join("r1cs.min.wcz").to_string_lossy())?;
-    let s = Shape::of_xark(&xbc, &cache).map_err(|e| e.to_string())?;
+    let rows = std::fs::read(d.join("r1cs.stream")).ok();
+    let s = Shape::of_xark(&xbc, rows).map_err(|e| e.to_string())?;
     eprintln!(
         "circuit: {} constraints, {} public inputs, domain 2^{}",
         s.num_constraints,

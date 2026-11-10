@@ -1,6 +1,7 @@
 //! The circuit as the keys see it: its R1CS matrices, built exactly as
 //! ark-groth16's generator builds them (a setup-mode constraint system,
-//! optimized for constraints, linear combinations inlined).
+//! optimized for constraints, linear combinations inlined), or expanded row
+//! by row from xark's streaming sources.
 
 use ark_bn254::Fr;
 use ark_relations::gr1cs::{
@@ -8,6 +9,8 @@ use ark_relations::gr1cs::{
 };
 use ark_relations::utils::matrix::Matrix;
 use sha2::{Digest, Sha256};
+use xark_groth16::ConstraintSource;
+use xark_groth16::r1cs::RowChunk;
 
 use crate::{Error, Result};
 
@@ -52,17 +55,48 @@ impl Shape {
         })
     }
 
-    /// From the artifacts of `xark build` and `xark setup --cache`: the
-    /// minimized R1CS (`r1cs.min.wcz`) the prover proves against, checked to
-    /// be the one for `circuit.xbc`.
-    pub fn of_xark(xbc: &[u8], r1cs_cache: &[u8]) -> Result<Self> {
-        let fingerprint: String = Sha256::digest(xbc)
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        let prog = xark_ir::r1cs_cache::deserialize_if_fingerprint(r1cs_cache, &fingerprint)
-            .ok_or_else(|| Error::Circuit("r1cs.min.wcz is not for this circuit.xbc".into()))?;
-        Self::of(xark_prover::XarkCircuit::for_setup_preminimized(prog))
+    /// From the artifacts of `xark build` and `xark setup`: the rows the
+    /// prover proves against, `circuit.xbc` streamed directly or, when setup
+    /// keyed the boundary-minimized circuit, the `r1cs.stream` it wrote beside
+    /// the key (checked to be the one for `circuit.xbc`).
+    pub fn of_xark(xbc: &[u8], rows: Option<Vec<u8>>) -> Result<Self> {
+        let (src, _) = passport_prover::constraint_source(xbc, rows)
+            .map_err(|e| Error::Circuit(e.to_string()))?;
+        Self::of_source(src.as_ref())
+    }
+
+    /// From any row source of xark's streaming prover.
+    pub fn of_source(src: &dyn ConstraintSource) -> Result<Self> {
+        let layout = src.layout();
+        let num_constraints = src.num_constraints();
+        let mut abc: [Matrix<Fr>; 3] = std::array::from_fn(|_| Vec::with_capacity(num_constraints));
+        let mut chunk = RowChunk::default();
+        for window in src.windows(1 << 14) {
+            src.expand(&window, &mut chunk);
+            for row in 0..chunk.rows() {
+                for (m, out) in abc.iter_mut().enumerate() {
+                    let (cols, ks) = chunk.terms(row, m);
+                    out.push(
+                        cols.iter()
+                            .zip(ks)
+                            .map(|(&c, k)| (*k, c as usize))
+                            .collect(),
+                    );
+                }
+            }
+        }
+        if abc[0].len() != num_constraints {
+            return Err(Error::Circuit("matrix height".into()));
+        }
+        let [a, b, c] = abc;
+        Ok(Self {
+            a,
+            b,
+            c,
+            num_constraints,
+            num_instance: layout.num_instance(),
+            num_witness: layout.num_witness(),
+        })
     }
 
     pub fn num_variables(&self) -> usize {

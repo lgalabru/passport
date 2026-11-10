@@ -42,7 +42,7 @@ impl std::fmt::Debug for Prover {
 
 impl Prover {
     /// From `circuit.xbc` (to solve the witness), `matrices.bin` (built from
-    /// it and `r1cs.min.wcz` by `passport-matrices`) and `pk.bin`.
+    /// it by `passport-matrices`) and `pk.bin`.
     pub fn load(xbc: &[u8], matrices: &[u8], pk_path: &std::path::Path) -> Result<Self> {
         let matrices = Matrices::read(matrices).map_err(|e| Error::Circuit(e.to_string()))?;
         if !matrices.is_for(xbc) {
@@ -50,8 +50,8 @@ impl Prover {
                 "matrices.bin is not for this circuit.xbc; rerun passport-matrices".into(),
             ));
         }
-        let pk = xark_backend::keys::Groth16Keys::read_proving_key(pk_path)
-            .map_err(|e| Error::Circuit(format!("proving key: {e}")))?;
+        let pk = passport_prover::keys::read_proving_key(pk_path)
+            .map_err(|e| Error::Circuit(e.to_string()))?;
         let inputs = xark_ir::function_decode::decode_vars(xbc)
             .iter()
             .filter(|v| matches!(v.role, VarRole::PublicInput | VarRole::PrivateInput))
@@ -121,7 +121,7 @@ impl Prover {
 /// `proof` in the layout `xark-verifier` takes on-chain: `-A ‖ B ‖ C`,
 /// little-endian.
 pub fn proof_le(proof: &Proof<Bn254>) -> Vec<u8> {
-    xark_backend::solana::assemble_proof_bytes_le(proof)
+    xark_backend::solana::assemble_proof_bytes_le(&passport_prover::keys::proof_to_xark(proof))
 }
 
 pub fn verify(vk: &VerifyingKey<Bn254>, proof: &Proof<Bn254>, public: &[Fr]) -> Result<bool> {

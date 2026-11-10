@@ -32,6 +32,8 @@ thiserror = { workspace = true }
 xark-prover = { workspace = true }
 xark-ir = { workspace = true }
 xark-backend = { workspace = true }
+xark-groth16 = { workspace = true }
+passport-prover = { workspace = true }
 
 [dev-dependencies]
 passport-attest = { workspace = true }

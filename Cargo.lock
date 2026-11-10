@@ -1899,6 +1899,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 
 [[package]]
+name = "cpubits"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15b85f9c39137c3a891689859392b1bd49812121d0d61c9caf00d46ed5ce06ae"
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2000,6 +2006,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-bigint"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "914c195c4d7fbc5ed7f88d14cbf85914d5c664967658d43404b263913a477e82"
+dependencies = [
+ "cpubits",
+ "ctutils",
+ "num-traits",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2040,9 +2057,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.3"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03bb0e1cc970d482d121d9a1744999169b69a07470b3d644a7894e53fcaf4574"
+checksum = "261af4dc7a06ea8a527a8717d8cbba3417530d6ea14e1edb3de6b67806be474f"
 dependencies = [
  "cmov",
 ]
@@ -2604,7 +2621,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
 dependencies = [
  "base16ct",
- "crypto-bigint",
+ "crypto-bigint 0.5.5",
  "digest 0.10.7",
  "ff",
  "generic-array 0.14.7",
@@ -5330,12 +5347,14 @@ dependencies = [
  "ark-snark",
  "ark-std 0.6.0",
  "passport-attest",
+ "passport-prover",
  "rand 0.8.8",
  "rand_chacha 0.3.1",
  "rayon",
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "xark-backend",
+ "xark-groth16",
  "xark-ir",
  "xark-prover",
 ]
@@ -5494,7 +5513,6 @@ dependencies = [
  "ark-ff 0.6.0",
  "ark-groth16",
  "ark-poly 0.6.0",
- "ark-relations",
  "ark-snark",
  "ark-std 0.6.0",
  "passport-attest",
@@ -5503,6 +5521,7 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "xark-backend",
+ "xark-groth16",
  "xark-ir",
  "xark-prover",
 ]
@@ -8966,9 +8985,9 @@ dependencies = [
 
 [[package]]
 name = "solana-nostd-alt-bn128"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b881117c294543b5ab41c6996bc3f122d3796a557589e3486d3e728ac806dc4a"
+checksum = "76e63e16ca0adae07b1513b21aceacfce4276bb620c30b4a80ce41562e6dd2b4"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -13082,27 +13101,28 @@ dependencies = [
 
 [[package]]
 name = "xark"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
+ "num-bigint 0.4.8",
+ "serde_json",
+ "xark-ir",
  "xark-macros",
+ "xark-prover",
+ "xark-schema",
 ]
 
 [[package]]
 name = "xark-backend"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
  "ark-ff 0.6.0",
- "ark-groth16",
- "ark-poly 0.6.0",
- "ark-relations",
  "ark-serialize 0.6.0",
- "ark-snark",
  "ark-std 0.6.0",
  "chrono",
  "hex",
@@ -13111,56 +13131,71 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rayon",
  "serde",
- "serde_json",
  "sha2 0.11.1",
  "thiserror 2.0.21",
+ "xark-groth16",
 ]
 
 [[package]]
 name = "xark-bignum"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "xark",
- "xark-prover",
 ]
 
 [[package]]
 name = "xark-bits"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "xark",
+]
+
+[[package]]
+name = "xark-groth16"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
+dependencies = [
+ "ark-bn254 0.6.0",
+ "ark-ec 0.6.0",
+ "ark-ff 0.6.0",
+ "ark-poly 0.6.0",
+ "ark-serialize 0.6.0",
+ "num-bigint 0.4.8",
+ "rand 0.8.8",
+ "rand_chacha 0.3.1",
+ "rayon",
+ "xark-ir",
 ]
 
 [[package]]
 name = "xark-hash"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "xark",
- "xark-prover",
 ]
 
 [[package]]
 name = "xark-ir"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ff 0.6.0",
+ "crypto-bigint 0.7.11",
  "num-bigint 0.4.8",
  "num-traits",
  "rayon",
  "serde",
  "serde_json",
- "wincode",
 ]
 
 [[package]]
 name = "xark-macros"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13169,25 +13204,35 @@ dependencies = [
 
 [[package]]
 name = "xark-prover"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "ark-bn254 0.6.0",
- "ark-ec 0.6.0",
  "ark-ff 0.6.0",
- "ark-groth16",
- "ark-relations",
- "ark-snark",
- "ark-std 0.6.0",
+ "ark-serialize 0.6.0",
  "num-bigint 0.4.8",
  "rand 0.8.8",
+ "serde_json",
+ "sha2 0.11.1",
+ "xark-groth16",
  "xark-ir",
 ]
 
 [[package]]
+name = "xark-schema"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
+dependencies = [
+ "ark-bn254 0.6.0",
+ "ark-ff 0.6.0",
+ "num-bigint 0.4.8",
+ "serde_json",
+]
+
+[[package]]
 name = "xark-sha256"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "xark",
  "xark-bits",
@@ -13196,11 +13241,12 @@ dependencies = [
 
 [[package]]
 name = "xark-verifier"
-version = "0.2.1"
-source = "git+https://github.com/lgalabru/xark?rev=0a73e7c#0a73e7c179dd47a7974946e58fbb12e7312dcf28"
+version = "0.3.0"
+source = "git+https://github.com/blueshift-gg/xark?tag=v0.3.0#9d148ac8930fe0c8658685d31d2b76f7c6e0a23d"
 dependencies = [
  "solana-nostd-alt-bn128",
  "solana-program-error 3.0.1",
+ "solana-sha256-hasher 3.1.0",
 ]
 
 [[package]]

@@ -39,8 +39,8 @@ fn run() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../circuits/claim/target/xark/passport_claim");
     let xbc = std::fs::read(dir.join("circuit.xbc")).expect("run `just claim-artifacts`");
-    let cache = std::fs::read(dir.join("r1cs.min.wcz")).unwrap();
-    let shape = Shape::of_xark(&xbc, &cache).unwrap();
+    let rows = std::fs::read(dir.join("r1cs.stream")).ok();
+    let shape = Shape::of_xark(&xbc, rows).unwrap();
     let power = shape.domain_size().trailing_zeros();
     let ptau = Ptau::insecure_from_secrets(power, Fr::from(91u8), Fr::from(92u8), Fr::from(93u8));
     let initial = Params::initial(&ptau, &shape).unwrap();
