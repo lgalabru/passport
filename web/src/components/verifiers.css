@@ -1,0 +1,99 @@
+/* The verifiers section: one tile, one terminal, four points under it. */
+
+.heading .tag {
+  max-width: none;
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: normal;
+  letter-spacing: normal;
+}
+
+.vf-tile {
+  --pad: 40px;
+  position: relative;
+  height: 400px;
+  overflow: hidden;
+  border-radius: 36px;
+  background: var(--tile);
+}
+
+.vf-picture {
+  position: absolute;
+  inset: 0 0 auto;
+}
+
+.vf-stage .ss-stage {
+  --ss-term-ok: #d9b25f;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* One gutter above and to the left; the terminal runs off the right and the foot */
+.vf-window {
+  position: absolute;
+  top: var(--pad);
+  left: var(--pad);
+  width: max(100%, 620px);
+  height: 460px;
+}
+
+/* The terminal at page scale: the tile is wide, so its type is too */
+.vf-window .ss-window__body {
+  padding: 8px 24px;
+  font-size: 15px;
+  line-height: 26px;
+}
+
+.vf-line {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 260ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vf-line[data-show] {
+  opacity: 1;
+  transform: none;
+}
+
+.vf-points {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 32px;
+  margin: 44px 0 0;
+  padding: 0 8px;
+  list-style: none;
+}
+
+.vf-points h3 {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.vf-points p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .vf-tile {
+    --pad: 24px;
+    height: 360px;
+  }
+
+  .vf-window .ss-window__body {
+    padding: 4px 16px;
+    font-size: 13px;
+    line-height: 22px;
+  }
+
+  .vf-points {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+}

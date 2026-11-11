@@ -1,0 +1,41 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/web.yml']
+  pull_request:
+    paths: ['web/**', '.github/workflows/web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web check
+      - run: pnpm --dir web build
+      - run: pnpm --dir web exec playwright install --with-deps chromium
+      - run: pnpm --dir web test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: website-test-results
+          path: web/test-results
+          retention-days: 7

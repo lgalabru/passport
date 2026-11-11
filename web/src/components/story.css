@@ -1,0 +1,458 @@
+/* The pinned iPhone story. Page-level classes are prefixed st-. */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 40px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 20px 0 8px;
+  border-radius: 999px;
+  background: var(--tile);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.chips span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 15px;
+}
+
+.note {
+  margin-top: 28px;
+  color: #a1a1a6;
+  font-size: 14px;
+  text-align: center;
+}
+
+.st-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.st-story {
+  position: relative;
+  height: 480vh;
+}
+
+.st-pin {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(20px, 3.4svh, 36px);
+  height: 100vh;
+  height: 100svh;
+  padding: 92px 24px 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.st-copy {
+  flex: none;
+  width: min(760px, 100%);
+}
+
+.st-chapters {
+  display: grid;
+  justify-items: center;
+}
+
+.st-chapter {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 320ms ease,
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.st-chapter[data-show] {
+  opacity: 1;
+  transform: none;
+  transition-delay: 140ms;
+  pointer-events: auto;
+}
+
+.st-chapter h3 {
+  margin-top: 16px;
+  font-size: clamp(34px, 6.2svh, 60px);
+  font-weight: 650;
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+}
+
+.st-chapter > p:last-child {
+  max-width: 560px;
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: clamp(16px, 2.2svh, 20px);
+  line-height: 1.45;
+  letter-spacing: -0.012em;
+}
+
+.st-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: min(360px, 100%);
+  margin: clamp(18px, 3svh, 28px) auto 0;
+  padding: 0;
+  color: #a1a1a6;
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+}
+
+.st-rail li {
+  transition: color 240ms ease;
+}
+
+.st-rail li[data-active] {
+  color: var(--ink);
+}
+
+.st-rail-track {
+  display: block;
+  height: 6px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--tile);
+}
+
+.st-rail-track span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--gold);
+  transform-origin: left;
+}
+
+/* ---- The phone and the passport under it ---- */
+
+.st-device {
+  position: relative;
+  flex: none;
+  width: min(380px, 100% - 72px, 52svh);
+  isolation: isolate;
+  container-type: inline-size;
+}
+
+/* A passport booklet at the phone's scale: 88 x 125 mm beside a 71.5 mm phone */
+.st-book {
+  position: absolute;
+  z-index: -1;
+  left: -11.5cqw;
+  top: -7cqw;
+  width: 123cqw;
+  aspect-ratio: 88 / 125;
+  overflow: hidden;
+  border-radius: 5cqw;
+  background: var(--navy);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8cqw 16cqw -8cqw rgba(13, 16, 52, 0.5);
+  rotate: -4deg;
+}
+
+.st-book img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The spine's fold */
+.st-book::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5cqw;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0));
+}
+
+.st-stage .ss-stage {
+  --ss-accent: #0a84ff;
+  --ss-success: #c2963c;
+  background: transparent;
+}
+
+/* ---- The screen, in iOS points ---- */
+
+.st-screen {
+  --blue: #0a84ff;
+  --gray: #8a8a8e;
+  position: absolute;
+  inset: 0;
+  background: #f2f2f7;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.st-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 62px 20px 0;
+  opacity: 0;
+  transform: scale(0.97);
+  transition:
+    opacity 260ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.st-view[data-show] {
+  opacity: 1;
+  transform: none;
+  transition-delay: 140ms;
+}
+
+.st-title {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  margin-bottom: 34px;
+  font-weight: 600;
+}
+
+.st-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  margin-bottom: 22px;
+}
+
+.st-ring svg:first-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.st-ring circle {
+  fill: #fff;
+  stroke: rgba(60, 60, 67, 0.12);
+  stroke-width: 6;
+}
+
+.st-ring .st-ring-arc {
+  fill: none;
+  stroke: #c2963c;
+  stroke-linecap: round;
+}
+
+.st-ring > svg:last-child {
+  position: relative;
+  transition: color 320ms ease;
+}
+
+.st-ring[data-done] > svg:last-child {
+  color: #c2963c;
+}
+
+.st-disc {
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  margin-bottom: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition:
+    background-color 320ms ease,
+    color 320ms ease;
+}
+
+.st-disc[data-on] {
+  background: #c2963c;
+  color: #fff;
+}
+
+.st-prompt {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.st-prompt--large {
+  margin-top: 14px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 34px;
+  letter-spacing: -0.02em;
+}
+
+.st-hint {
+  margin-top: 4px;
+  color: var(--gray);
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.st-wait {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.st-wait[data-show] {
+  opacity: 1;
+}
+
+.st-secure {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--gray);
+  font-size: 13px;
+}
+
+.st-card {
+  align-self: stretch;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: #fff;
+  text-align: left;
+}
+
+.st-checks {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 300ms ease,
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.st-checks[data-show] {
+  opacity: 1;
+  transform: none;
+}
+
+.st-wait + .st-checks {
+  margin-top: -10px;
+}
+
+.st-card-label {
+  margin-bottom: 12px;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.st-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.st-line + .st-line {
+  margin-top: 12px;
+  padding-top: 12px;
+  box-shadow: inset 0 1px 0 rgba(60, 60, 67, 0.12);
+}
+
+.st-line b {
+  font-weight: 600;
+}
+
+.st-claim {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.st-claim svg {
+  color: var(--blue);
+}
+
+.st-kept {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #b4b4b9;
+}
+
+.st-note {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-self: stretch;
+  margin: 14px 4px 18px;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 17px;
+  text-align: left;
+}
+
+/* iOS capsule buttons, on the kit's Button */
+.st-button {
+  --ss-button-height: 50px;
+  --ss-button-pad: 22px;
+  align-self: stretch;
+  border-radius: 25px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--blue);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.st-button--fill {
+  margin-bottom: 4px;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.st-who {
+  margin-top: 18px;
+}
+
+.st-done {
+  margin-bottom: 4px;
+}
+
+@media (max-height: 720px) {
+  .st-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .st-pin {
+    padding-top: 84px;
+  }
+}
