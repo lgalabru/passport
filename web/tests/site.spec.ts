@@ -41,3 +41,21 @@ test('the experimental status is stated plainly', async ({ page }) => {
     page.getByRole('heading', { name: 'Not audited. Not for anything real.' }),
   ).toBeInViewport();
 });
+
+test('nothing widens the page on the way down', async ({ page }) => {
+  await page.goto('/');
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y <= height; y += 400) {
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), y);
+    // The page clips sideways overflow on the body. Lift that, and the layout
+    // must still be no wider than the screen: nothing may rely on the clip.
+    const extra = await page.evaluate(() => {
+      const { body, documentElement: root } = document;
+      body.style.overflowX = 'visible';
+      const width = root.scrollWidth - root.clientWidth;
+      body.style.overflowX = '';
+      return width;
+    });
+    expect(extra, `sideways overflow at scroll ${y}`).toBeLessThanOrEqual(0);
+  }
+});
