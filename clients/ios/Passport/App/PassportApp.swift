@@ -8,6 +8,7 @@ struct PassportApp: App {
 
     init() {
         NotificationRouter.shared.install()
+        PaperAppearance.install()
     }
 
     var body: some Scene {
@@ -20,6 +21,9 @@ struct PassportApp: App {
                 .onAppear { NotificationRouter.shared.open = { [model] in model.open($0) } }
                 .onChange(of: phase) { _, phase in
                     if phase != .active { model.conceal() }
+                    // Put away: the passport closes. (Launching passes through
+                    // `.inactive` too, so only `.background` closes it.)
+                    if phase == .background { model.closeCover() }
                 }
                 .overlay {
                     // Identity data stays out of the app switcher.

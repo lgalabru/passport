@@ -274,6 +274,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Passport.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4HY7TSGF6M;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -285,7 +286,7 @@
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/RustCore/lib/$(PLATFORM_NAME)";
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = "-lpassport_ffi";
-				PRODUCT_BUNDLE_IDENTIFIER = org.solana.passport;
+				PRODUCT_BUNDLE_IDENTIFIER = sh.scarce.passport;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -305,6 +306,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Passport.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4HY7TSGF6M;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -316,7 +318,7 @@
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/RustCore/lib/$(PLATFORM_NAME)";
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = "-lpassport_ffi";
-				PRODUCT_BUNDLE_IDENTIFIER = org.solana.passport;
+				PRODUCT_BUNDLE_IDENTIFIER = sh.scarce.passport;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

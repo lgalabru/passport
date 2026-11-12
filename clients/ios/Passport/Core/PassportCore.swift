@@ -10,8 +10,8 @@ struct DocumentKey: Codable, Equatable, Sendable {
     /// `YYMMDD`.
     var dateOfExpiry: String
 
-    /// The ICAO Doc 9303 specimen, which the built-in demo chip answers to.
-    static let specimen = DocumentKey(documentNumber: "L898902C3", dateOfBirth: "740812", dateOfExpiry: "120415")
+    /// The specimen passport the built-in demo chip answers to.
+    static let specimen = DocumentKey(documentNumber: "SCARCE001", dateOfBirth: "090103", dateOfExpiry: "300103")
 }
 
 /// What a file on the chip is addressed as: `EF.COM`, `EF.SOD` or a data group.

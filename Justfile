@@ -160,4 +160,4 @@ ios-build:
 ios-run device="iPhone Duo": ios-build
     xcrun simctl boot "{{device}}" 2>/dev/null || true
     xcrun simctl install "{{device}}" clients/ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Passport.app
-    xcrun simctl launch --terminate-running-process "{{device}}" org.solana.passport
+    xcrun simctl launch --terminate-running-process "{{device}}" sh.scarce.passport

@@ -42,8 +42,8 @@ xcrun simctl spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChange
 xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged
 
 # A fresh install: no passport, no history.
-xcrun simctl terminate "$UDID" org.solana.passport 2>/dev/null || true
-xcrun simctl uninstall "$UDID" org.solana.passport
+xcrun simctl terminate "$UDID" sh.scarce.passport 2>/dev/null || true
+xcrun simctl uninstall "$UDID" sh.scarce.passport
 xcrun simctl install "$UDID" "$APP"
 
 # The shop: a streaming service renting a film rated 18. RP_NAME, RP_PURPOSE
@@ -79,7 +79,7 @@ displays)
     ;;
 esac
 sleep 2
-xcrun simctl launch "$UDID" org.solana.passport -demo >/dev/null
+xcrun simctl launch "$UDID" sh.scarce.passport -demo >/dev/null
 
 cat <<'EOF'
 
@@ -88,7 +88,7 @@ Recording. In DeviceHub (keep its window in front, don't move it):
   2. Tap Allow when Passport asks to send notifications; it returns to the Home screen.
 EOF
 wait_display() { python3 "$ROOT/clients/ios/scripts/follow-displays.py" wait "$UDID" "$1" "$OUT"; }
-DATA=$(xcrun simctl get_app_container "$UDID" org.solana.passport data)
+DATA=$(xcrun simctl get_app_container "$UDID" sh.scarce.passport data)
 until [ -e "$DATA/Documents/demo-home" ]; do sleep 0.5; done
 sleep 3
 # The request arrives as a notification, carrying the OpenID4VP link.
@@ -97,7 +97,7 @@ import json, sys
 link, title, body = sys.argv[1:4]
 print(json.dumps({"aps": {"alert": {"title": title, "body": body}, "sound": "default"}, "request": link}))
 PY
-xcrun simctl push "$UDID" org.solana.passport "$OUT/push.json" >/dev/null
+xcrun simctl push "$UDID" sh.scarce.passport "$OUT/push.json" >/dev/null
 # Touch the sensor whenever Share asks, until the shop has its proof.
 (
     while ! grep -q '^VERIFIED' "$OUT/rp.out" && [ ! -e "$OUT/stop" ]; do

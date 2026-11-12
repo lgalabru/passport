@@ -77,7 +77,39 @@ final class AppModel {
     /// The window is laid out as two pages (an unfolded Duo). Folded, the
     /// app keeps the document to a glanceable minimum.
     var unfolded = false {
-        didSet { if !unfolded { revealed = false } }
+        didSet {
+            if !unfolded { revealed = false }
+            // Folding the phone closes the passport.
+            if oldValue && !unfolded { closeCover() }
+        }
+    }
+
+    /// On an iPhone Duo the folded screen is the passport's cover, closed
+    /// until the holder slides its clasp or unfolds the phone, and closed
+    /// again when the phone folds or the app goes to the background. A request
+    /// waits on the cover; setup in progress opens it on its own.
+    private(set) var coverClosed = HingeState.isDuo && !opensOpen
+
+    /// `-opened` (debug builds): start with the cover open, for screenshots.
+    private static let opensOpen: Bool = {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-opened")
+        #else
+        false
+        #endif
+    }()
+
+    var showsCover: Bool { coverClosed && !unfolded && setup == nil }
+
+    /// Requests waiting behind a closed cover.
+    var pendingRequests: [RequestSession] { session.map { [$0] } ?? [] }
+
+    func openCover() {
+        coverClosed = false
+    }
+
+    func closeCover() {
+        if HingeState.isDuo { coverClosed = true }
     }
 
     /// The details were unlocked on the single screen with Face ID / Touch ID.
@@ -120,6 +152,12 @@ final class AppModel {
     init() {
         identity = Vault.loadIdentity()
         history = Vault.loadHistory()
+        // A sample from an earlier specimen: read the current one instead.
+        if let sample = identity, sample.sample, sample.record.documentNumber != DocumentKey.specimen.documentNumber {
+            Vault.wipe()
+            identity = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.addSample() }
+        }
         Task.detached(priority: .utility) { [weak self] in
             let result = Result { try Attestation.loadProver() }
             await MainActor.run {
@@ -131,8 +169,9 @@ final class AppModel {
         }
         #if DEBUG
         // `-sample`: enroll the specimen at launch. `-open <url>`: handle a
-        // request link at launch. `-auto-share`: approve requests. For
-        // screenshots and end-to-end checks on a simulator.
+        // request link at launch. `-auto-share`: approve requests. `-opened`:
+        // a Duo starts with its cover open. For screenshots and end-to-end
+        // checks on a simulator.
         let arguments = ProcessInfo.processInfo.arguments
         if Self.demo {
             if identity == nil {
@@ -147,7 +186,22 @@ final class AppModel {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.open(url) }
         }
         #endif
+        if let url = Self.demoRequest {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.open(url) }
+        }
     }
+
+    /// DEMO: a request to review at every launch, from a fictional streaming
+    /// service, so the cover has something waiting behind it. Sharing posts
+    /// to a host that doesn't exist and fails. Set to `nil` to drop it.
+    static let demoRequest: URL? = URL(string:
+        "openid4vp://?client_id=redirect_uri%3Ahttps%3A%2F%2Flumen.example%2Fverify"
+        + "&response_type=vp_token&response_mode=direct_post"
+        + "&response_uri=https%3A%2F%2Flumen.example%2Fverify"
+        + "&nonce=03c44ef77055fcca&state=e399e8b1"
+        + "&dcql_query=%7B%22credentials%22%3A%5B%7B%22claims%22%3A%5B%7B%22path%22%3A%5B%22age_equal_or_over%22%2C%2218%22%5D%7D%2C%7B%22path%22%3A%5B%22nationalities%22%5D%7D%5D%2C%22format%22%3A%22passport-claim%2Bzk%22%2C%22id%22%3A%22passport%22%7D%5D%7D"
+        + "&client_metadata=%7B%22client_name%22%3A%22Lumen%2B%22%7D"
+    )
 
     #if DEBUG
     /// The demo script delivers its request link without the system's "Open in

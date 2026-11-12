@@ -16,13 +16,32 @@ enum SpreadLayout: Equatable {
 
     static func resolve(_ proxy: GeometryProxy) -> SpreadLayout {
         if #available(iOS 27.1, *) {
-            let regions = proxy.reservedRegions(kind: .division).filter(\.isActive)
-            if let region = regions.first {
+            // The fold's region is active only while the device is partly
+            // folded; flat, it is inactive and zero wide, but still says where
+            // the hinge is. That matters: on the inner display the status bar
+            // and Dynamic Island sit in the trailing safe area, so half of the
+            // safe area isn't the hinge; the hinge is some 40 points further.
+            let regions = proxy.reservedRegions(kind: .division, options: .includeInactive)
+            if let region = regions.first(where: \.isActive) ?? regions.first {
+                // The region's frame includes 20-point margins either side of the
+                // fold, and runs the full screen, safe areas included. A region
+                // that doesn't fit the screen (the cover display sees the hinge's
+                // for a moment while folding) is no division of this view.
                 let frame = region.frame
-                if frame.height >= frame.width {
-                    return .pages(leading: max(0, frame.minX), gap: frame.width, hinge: true)
+                let safe = proxy.safeAreaInsets
+                let screen = CGRect(
+                    x: -safe.leading, y: -safe.top,
+                    width: proxy.size.width + safe.leading + safe.trailing,
+                    height: proxy.size.height + safe.top + safe.bottom
+                ).insetBy(dx: -1, dy: -1)
+                if screen.contains(frame) {
+                    if frame.height >= frame.width, frame.minX > 0, frame.maxX < proxy.size.width {
+                        return .pages(leading: frame.minX, gap: frame.width, hinge: true)
+                    }
+                    if frame.width > frame.height, frame.minY > 0, frame.maxY < proxy.size.height {
+                        return .stacked(top: frame.minY, gap: frame.height)
+                    }
                 }
-                return .stacked(top: max(0, frame.minY), gap: frame.height)
             }
         }
         let size = proxy.size
@@ -52,22 +71,41 @@ struct Spread<Leading: View, Trailing: View, Single: View>: View {
             case .single:
                 single
             case .pages(let width, let gap, let isHinge):
-                HStack(spacing: 0) {
-                    leading
-                        .frame(width: width)
-                        .overlay(alignment: .trailing) { PageGutter(edge: .trailing, depth: hinge.foldDepth) }
-                    Spine(axis: .vertical, hinge: isHinge, depth: hinge.foldDepth, degrees: hinge.degrees)
-                        .frame(width: max(gap, isHinge ? gap : 1))
-                    trailing
-                        .frame(maxWidth: .infinity)
-                        .overlay(alignment: .leading) { PageGutter(edge: .leading, depth: hinge.foldDepth) }
+                // The fold itself, in the middle of the division's margins.
+                let fold = width + gap / 2
+                // The pages' prints run under the margins and the safe areas, meeting at the fold.
+                let half = max(fold, proxy.size.width + proxy.safeAreaInsets.trailing - fold)
+                ZStack {
+                    HStack(spacing: 0) {
+                        PageBackground(side: .left, spine: true).frame(width: fold)
+                        PageBackground(side: .right, spine: true).frame(maxWidth: .infinity)
+                    }
+                    .environment(\.spreadHalfWidth, half)
+                    .ignoresSafeArea()
+                    HStack(spacing: 0) {
+                        leading
+                            .frame(width: width)
+                            .overlay(alignment: .trailing) { PageGutter(edge: .trailing, depth: hinge.foldDepth) }
+                        Spine(axis: .vertical, hinge: isHinge, depth: hinge.foldDepth, degrees: hinge.degrees)
+                            .frame(width: max(gap, 1))
+                        trailing
+                            .frame(maxWidth: .infinity)
+                            .overlay(alignment: .leading) { PageGutter(edge: .leading, depth: hinge.foldDepth) }
+                    }
                 }
             case .stacked(let height, let gap):
-                VStack(spacing: 0) {
-                    leading.frame(height: height)
-                    Spine(axis: .horizontal, hinge: true, depth: hinge.foldDepth, degrees: hinge.degrees)
-                        .frame(height: gap)
-                    trailing.frame(maxHeight: .infinity)
+                ZStack {
+                    VStack(spacing: 0) {
+                        PageBackground(side: .left).frame(height: height + gap / 2)
+                        PageBackground(side: .right).frame(maxHeight: .infinity)
+                    }
+                    .ignoresSafeArea()
+                    VStack(spacing: 0) {
+                        leading.frame(height: height)
+                        Spine(axis: .horizontal, hinge: true, depth: hinge.foldDepth, degrees: hinge.degrees)
+                            .frame(height: gap)
+                        trailing.frame(maxHeight: .infinity)
+                    }
                 }
             }
             }
@@ -77,7 +115,8 @@ struct Spread<Leading: View, Trailing: View, Single: View>: View {
     }
 }
 
-/// The book's spine: what sits over the hinge.
+/// The book's spine: what sits over the hinge. The pages' prints run under
+/// it; it only deepens into a crease as the Duo folds.
 private struct Spine: View {
     var axis: Axis
     var hinge: Bool
@@ -85,11 +124,12 @@ private struct Spine: View {
     var degrees: Int?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(Color(.systemBackground))
-            Rectangle().fill(Color(.separator))
-                .frame(width: axis == .vertical ? 0.5 : nil, height: axis == .horizontal ? 0.5 : nil)
-        }
+        LinearGradient(
+            colors: [.clear, .black.opacity(0.18 * depth + (hinge ? 0.04 : 0)), .clear],
+            startPoint: axis == .vertical ? .leading : .top,
+            endPoint: axis == .vertical ? .trailing : .bottom
+        )
+        .allowsHitTesting(false)
         .ignoresSafeArea()
     }
 }

@@ -1,5 +1,6 @@
-//! A software eMRTD holding the ICAO Doc 9303 specimen passport, so the app can
-//! be shown on a simulator (no NFC there) and tried without a document.
+//! A software eMRTD holding a specimen passport (the MRZ layout of ICAO Doc
+//! 9303, the data of the demo's holder), so the app can be shown on a
+//! simulator (no NFC there) and tried without a document.
 //!
 //! The card side of BAC and secure messaging mirrors the test chip in
 //! `crates/integration/tests/common/chip.rs`; both sit on the driver's crypto
@@ -18,12 +19,13 @@ use passport_driver_emrtd::types::{MrzKey, TransportError, TransportProtocol};
 use passport_pki::fixtures::{TestChip, TestPki};
 use std::sync::OnceLock;
 
-/// ICAO Doc 9303 Part 4 specimen MRZ (TD3).
+/// The specimen's MRZ (TD3): a US passport for the demo's holder, born on the
+/// day of the genesis block, expiring in 2030. Check digits per Doc 9303.
 pub const SPECIMEN_MRZ: &[u8; 88] =
-    b"P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<L898902C36UTO7408122F1204159ZE184226B<<<<<10";
+    b"P<USAGALABRU<<LUDO<<<<<<<<<<<<<<<<<<<<<<<<<<SCARCE0012USA0901037M3001031<<<<<<<<<<<<<<04";
 
 /// BAC key of the specimen: document number, birth and expiry dates.
-pub const SPECIMEN_KEY: (&str, &str, &str) = ("L898902C3", "740812", "120415");
+pub const SPECIMEN_KEY: (&str, &str, &str) = ("SCARCE001", "090103", "300103");
 
 const FACE: &[u8] = include_bytes!("../assets/specimen-face.jpeg");
 
@@ -56,7 +58,7 @@ const SPECIMEN_SEED: u64 = 0x5BEC_1BE4;
 pub fn specimen() -> &'static Specimen {
     static SPECIMEN: OnceLock<Specimen> = OnceLock::new();
     SPECIMEN.get_or_init(|| Specimen {
-        pki: TestPki::generate(SPECIMEN_SEED, "UT"),
+        pki: TestPki::generate(SPECIMEN_SEED, "US"),
         chip: TestChip::generate(SPECIMEN_SEED),
     })
 }
@@ -114,8 +116,8 @@ fn dg2() -> Vec<u8> {
 fn dg11() -> Vec<u8> {
     let body = [
         tlv(&[0x5C], &[0x5F, 0x0E, 0x5F, 0x11]),
-        tlv(&[0x5F, 0x0E], b"ERIKSSON<<ANNA<MARIA"),
-        tlv(&[0x5F, 0x11], b"ZENITH,UTOPIA"),
+        tlv(&[0x5F, 0x0E], b"GALABRU<<LUDO"),
+        tlv(&[0x5F, 0x11], b"SAN FRANCISCO,USA"),
     ]
     .concat();
     tlv(&[0x6B], &body)

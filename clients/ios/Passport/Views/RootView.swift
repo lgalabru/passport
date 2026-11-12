@@ -12,14 +12,22 @@ struct RootView: View {
         Spread(onSpread: { model.unfolded = $0 }) {
             NavigationStack {
                 HomeView(spread: true)
+                    .page(.left, spine: true)
             }
         } trailing: {
             NavigationStack {
                 SecondPage()
+                    .page(.right, spine: true)
             }
         } single: {
-            SingleScreen()
+            if model.showsCover {
+                CoverView(pending: model.pendingRequests) { model.openCover() }
+                    .transition(.opacity)
+            } else {
+                SingleScreen()
+            }
         }
+        .animation(.smooth(duration: 0.4), value: model.showsCover)
         .sheet(item: Binding(get: { model.setup }, set: { if $0 == nil { model.setup = nil } })) { setup in
             SetupFlow(setup: setup)
         }
@@ -35,8 +43,7 @@ private struct SecondPage: View {
 
     var body: some View {
         if let session = model.session {
-            RequestView(session: session, onPage: true)
-                .toolbar(.hidden, for: .navigationBar)
+            RequestsPage(sessions: [session])
         } else {
             switch model.selection {
             case .document: DocumentDetails()
@@ -56,14 +63,18 @@ private struct SingleScreen: View {
     var body: some View {
         NavigationStack {
             HomeView()
+                .page(.left)
                 .navigationDestination(for: AppModel.Selection.self) { selection in
-                    switch selection {
-                    case .document: DocumentDetails()
-                    case .presentation(let id):
-                        if let presentation = model.history.first(where: { $0.id == id }) {
-                            PresentationDetail(presentation: presentation)
+                    Group {
+                        switch selection {
+                        case .document: DocumentDetails()
+                        case .presentation(let id):
+                            if let presentation = model.history.first(where: { $0.id == id }) {
+                                PresentationDetail(presentation: presentation)
+                            }
                         }
                     }
+                    .page(.right)
                 }
         }
         // Only the sheet's own buttons end a request: this sheet is also torn

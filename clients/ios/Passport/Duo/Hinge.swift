@@ -61,6 +61,22 @@ struct HingeObserver: UIViewRepresentable {
 extension HingeState {
     /// What views see before the app injects the observed hinge.
     static let unavailable = HingeState()
+
+    /// Whether this is an iPhone Duo, known before the hinge reports: the
+    /// model identifier (`iPhone19,4`), the simulator's included.
+    static let isDuo: Bool = {
+        let model: String
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            model = simulated
+        } else {
+            var system = utsname()
+            uname(&system)
+            model = withUnsafeBytes(of: &system.machine) { bytes in
+                String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+            }
+        }
+        return model == "iPhone19,4"
+    }()
 }
 
 extension EnvironmentValues {

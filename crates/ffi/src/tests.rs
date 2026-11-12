@@ -106,8 +106,8 @@ fn demo_dg1_decodes_the_specimen() {
     assert_eq!(result["ok"], true, "{result}");
     let record = &result["outcome"]["record"];
     assert_eq!(result["outcome"]["kind"], "dg1");
-    assert_eq!(record["name"], "ERIKSSON  ANNA MARIA");
-    assert_eq!(record["document_number"], "L898902C3");
+    assert_eq!(record["name"], "GALABRU  LUDO");
+    assert_eq!(record["document_number"], "SCARCE001");
     assert_eq!(record["format"], "TD3");
     assert_eq!(record["failed_checks"].as_array().unwrap().len(), 0);
     assert_eq!(
@@ -130,7 +130,7 @@ fn demo_dg2_streams_the_portrait_to_the_sink() {
     assert_eq!(result["ok"], true, "{result}");
     assert_eq!(result["outcome"]["format"], "jpeg");
     let (name, bytes) = recorder.file.as_ref().unwrap();
-    assert_eq!(name, "L898902C3-DG2.jpeg");
+    assert_eq!(name, "SCARCE001-DG2.jpeg");
     assert!(recorder.closed);
     assert_eq!(&bytes[..4], &[0xFF, 0xD8, 0xFF, 0xE0]);
     assert!(include_bytes!("../assets/specimen-face.jpeg").starts_with(&bytes[..64]));
@@ -163,7 +163,7 @@ fn the_specimen_passes_passive_authentication() {
     passport_pki::passive_authentication(
         &sod,
         &[(1, &demo_dg1()), (15, &dg15)],
-        &demo::specimen().pki.trust(),
+        &demo::specimen().pki.trust_for(*b"USA"),
         20261030,
     )
     .unwrap();
@@ -206,7 +206,7 @@ fn the_specimen_answers_active_authentication() {
         let result = demo_authenticate(demo::SPECIMEN_KEY, bad);
         assert_eq!(result["ok"], false, "{bad}");
     }
-    let wrong = demo_authenticate(("L898902C3", "740813", "120415"), "0102030405060708");
+    let wrong = demo_authenticate(("SCARCE001", "090104", "300103"), "0102030405060708");
     assert_eq!(wrong["ok"], false);
 }
 
@@ -221,7 +221,7 @@ fn demo_missing_group_is_file_not_found() {
 #[test]
 fn demo_rejects_a_wrong_key_like_a_real_chip() {
     let mut recorder = Recorder::default();
-    let result = demo(&mut recorder, ("L898902C3", "740812", "130415"), 1);
+    let result = demo(&mut recorder, ("SCARCE001", "090103", "310103"), 1);
     assert_eq!(result["ok"], false);
     assert_eq!(result["retryable"], false);
     assert!(result["hint"].as_str().unwrap().contains("key"), "{result}");
@@ -232,7 +232,7 @@ fn demo_rejects_a_wrong_key_like_a_real_chip() {
 fn a_missing_card_is_retryable() {
     let mut recorder = Recorder::default();
     let host = host(&mut recorder);
-    let (doc, dob, doe) = (c"L898902C3", c"740812", c"120415");
+    let (doc, dob, doe) = (c"SCARCE001", c"090103", c"300103");
     let result = take(unsafe { passport_read(&host, doc.as_ptr(), dob.as_ptr(), doe.as_ptr(), 1) });
     assert_eq!(result["ok"], false);
     assert_eq!(result["retryable"], true);
@@ -241,7 +241,7 @@ fn a_missing_card_is_retryable() {
 #[test]
 fn invalid_key_and_target_are_reported() {
     let mut recorder = Recorder::default();
-    let result = demo(&mut recorder, ("L898902C3", "7408", "120415"), 1);
+    let result = demo(&mut recorder, ("SCARCE001", "0901", "300103"), 1);
     assert_eq!(result["ok"], false);
     assert!(recorder.events.is_empty());
     let result = demo(&mut recorder, demo::SPECIMEN_KEY, 16);
@@ -324,10 +324,11 @@ fn request_preview_prove_and_respond() {
     let request = CString::new(parsed["request"].to_string()).unwrap();
 
     let dg1 = CString::new(json::hex(&demo_dg1())).unwrap();
-    let now = 1_793_361_600i64;
+    // 2027-12-27: the specimen's holder, born 2009-01-03, is 18 by then.
+    let now = 1_830_000_000i64;
     let preview = take(unsafe { passport_preview(request.as_ptr(), dg1.as_ptr(), now) });
     assert_eq!(preview["claims"][0]["display"], "Yes", "{preview}");
-    assert_eq!(preview["claims"][1]["display"], "UTO");
+    assert_eq!(preview["claims"][1]["display"], "USA");
 
     let secret = CString::new("11".repeat(32)).unwrap();
     let enrolled = take(unsafe { passport_enroll(dg1.as_ptr(), secret.as_ptr()) });
@@ -406,7 +407,7 @@ fn the_specimen_checks_enrolls_and_proves_against_the_registry() {
         )
     });
     assert_eq!(report["enrollable"], true, "{report}");
-    assert_eq!(report["issuing_state"], "UTO");
+    assert_eq!(report["issuing_state"], "USA");
     assert_eq!(report["checks"].as_array().unwrap().len(), 6);
     // Without DG15 or an answer it cannot enroll, and says which check failed.
     let none = c("");
@@ -553,7 +554,8 @@ fn the_specimen_checks_enrolls_and_proves_against_the_registry() {
             c(&serde_json::json!({ "program_id": program, "leaves": leaves, "recent_roots": roots })
             .to_string())
         };
-    let now = 1_793_361_600i64;
+    // 2027-12-27: the specimen's holder, born 2009-01-03, is 18 by then.
+    let now = 1_830_000_000i64;
     let prove = |registry: &CString| {
         take(unsafe {
             passport_prove_enrolled(

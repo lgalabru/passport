@@ -15,7 +15,7 @@ struct VerificationSection: View {
                         Text("Verified passport")
                         Text("Enrolled in the registry on \(onChain.enrolledAt.formatted(date: .abbreviated, time: .omitted))")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Paper.faded)
                     }
                 } icon: {
                     Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
@@ -33,20 +33,21 @@ struct VerificationSection: View {
                         Text("Not verified")
                         Text(identity.compatibility == nil ? "Read your passport again to check it" : "This passport cannot be verified yet")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Paper.faded)
                     }
                 } icon: {
-                    Image(systemName: "seal").foregroundStyle(.secondary)
+                    Image(systemName: "seal").foregroundStyle(Paper.faded)
                 }
             }
             if identity.compatibility != nil {
                 Button("Compatibility") { showsCompatibility = true }
             }
         } header: {
-            Text("Verification")
+            PaperHeading("Verification")
         } footer: {
-            Text(footer)
+            PaperFootnote(footer)
         }
+        .paperRows()
         .sheet(isPresented: $showsCompatibility) {
             if let compatibility = identity.compatibility {
                 NavigationStack { CompatibilityView(compatibility: compatibility) }

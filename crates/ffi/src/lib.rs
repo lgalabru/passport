@@ -416,8 +416,8 @@ pub unsafe extern "C" fn passport_read(
     }
 }
 
-/// Like [`passport_read`], but against a software chip holding the ICAO
-/// specimen passport (`L898902C3`, born `740812`, expires `120415`). The
+/// Like [`passport_read`], but against a software chip holding the specimen
+/// passport (`SCARCE001`, born `090103`, expires `300103`). The
 /// host's `transceive` is not used; `delay_ms` is slept per APDU so progress
 /// looks like a real card. A wrong key fails BAC exactly as a real chip would.
 ///

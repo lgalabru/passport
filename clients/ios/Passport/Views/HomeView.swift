@@ -18,7 +18,9 @@ struct HomeView: View {
                 EmptyHome()
             }
         }
-        .navigationTitle("Passport")
+        // The data page carries the title; an enrolled passport shows no other.
+        .navigationTitle(model.identity == nil ? "Passport" : "")
+        .navigationBarTitleDisplayMode(model.identity == nil ? .large : .inline)
         .toolbar {
             if model.identity != nil {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -41,16 +43,15 @@ struct HomeView: View {
     private func list(_ identity: Identity) -> some View {
         List {
             Section {
-                PassportCard(identity: identity, portrait: model.portrait, masked: masked)
+                DataPage(identity: identity, portrait: model.portrait, masked: masked)
                     .contentShape(.rect)
                     .onTapGesture { if masked { Task { await model.reveal() } } }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                     .listRowBackground(Color.clear)
                     .animation(.smooth, value: masked)
             } footer: {
                 if masked {
-                    Label("Tap to show your details", systemImage: "lock")
-                        .font(.footnote)
+                    PaperFootnote(Text("\(Image(systemName: "lock")) Tap to show your details"))
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -63,14 +64,15 @@ struct HomeView: View {
                         Label("Document Details", systemImage: "person.text.rectangle")
                     }
                 } footer: {
-                    Text("Read from the chip in your \(identity.record.documentCode.hasPrefix("P") ? "passport" : "card") on \(identity.enrolledAt.formatted(date: .abbreviated, time: .omitted)).")
+                    PaperFootnote("Read from the chip in your \(identity.record.documentCode.hasPrefix("P") ? "passport" : "card") on \(identity.enrolledAt.formatted(date: .abbreviated, time: .omitted)).")
                 }
+                .paperRows()
             }
 
             Section {
                 if model.history.isEmpty {
                     Text("Nothing shared yet")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Paper.faded)
                 } else {
                     ForEach(model.history) { presentation in
                         row(.presentation(presentation.id)) {
@@ -79,10 +81,11 @@ struct HomeView: View {
                     }
                 }
             } header: {
-                Text("Shared")
+                PaperHeading("Shared")
             } footer: {
-                Text("When a website or app asks you to prove something, like being over 18, Passport answers with a proof. It never sends your passport.")
+                PaperFootnote("When a website or app asks you to prove something, like being over 18, Passport answers with a proof. It never sends your passport.")
             }
+            .paperRows()
         }
         .listStyle(.insetGrouped)
     }
@@ -98,12 +101,17 @@ struct HomeView: View {
                     Spacer()
                     Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Paper.gold)
                 }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .listRowBackground(model.selection == selection ? Color(.systemFill) : nil)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(model.selection == selection ? Paper.gold.opacity(0.28) : Color.white.opacity(0.58))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Paper.gold.opacity(0.35), lineWidth: 0.5))
+                    .padding(.vertical, 1)
+            )
         } else {
             NavigationLink(value: selection) { label() }
         }
@@ -118,16 +126,16 @@ struct PresentationRow: View {
             VerifierBadge(name: presentation.verifier, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(presentation.verifier)
-                    .font(.body.weight(.medium))
+                    .font(.engraved(.body))
                 Text(presentation.shared.map(\.summary).joined(separator: " · "))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Paper.faded)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
             Text(presentation.date.formatted(.relative(presentation: .named)))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Paper.faded)
         }
     }
 }
@@ -140,7 +148,7 @@ struct VerifierBadge: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(Color.accentColor.gradient)
+            Circle().fill(Paper.ink.gradient)
             Text(String(name.prefix(1)).uppercased())
                 .font(.system(size: size * 0.44, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
@@ -167,14 +175,14 @@ private struct EmptyHome: View {
             Spacer()
             Image(systemName: "person.text.rectangle")
                 .font(.system(size: 64, weight: .light))
-                .foregroundStyle(.tint)
+                .foregroundStyle(Paper.gold)
                 .symbolRenderingMode(.hierarchical)
                 .padding(.bottom, 20)
             Text("Add Your Passport")
-                .font(.title.bold())
+                .font(.engraved(.title, weight: .bold))
             Text("Prove things about yourself, like being over 18, without showing your passport to anyone.")
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Paper.faded)
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)
                 .padding(.horizontal, 32)

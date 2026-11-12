@@ -16,14 +16,17 @@ struct DocumentDetails: View {
                     }
                     .listRowBackground(Color.clear)
                 }
-                Section("Personal") {
+                Section {
                     LabeledContent("Surname", value: r.surname.capitalized)
                     LabeledContent("Given Names", value: r.givenNames.capitalized)
                     LabeledContent("Date of Birth", value: MRZFormat.pretty(r.dateOfBirth, birth: true))
                     LabeledContent("Sex", value: sex(r.gender))
                     LabeledContent("Nationality", value: "\(Country.flag(r.nationality)) \(Country.name(r.nationality))")
+                } header: {
+                    PaperHeading("Personal")
                 }
-                Section("Document") {
+                .paperRows()
+                Section {
                     LabeledContent("Type", value: r.documentCode.hasPrefix("P") ? "Passport" : "Identity Card")
                     LabeledContent("Number", value: r.documentNumber)
                     LabeledContent("Issued By", value: Country.name(r.issuingState))
@@ -39,18 +42,22 @@ struct DocumentDetails: View {
                             }
                         }
                     }
+                } header: {
+                    PaperHeading("Document")
                 }
+                .paperRows()
                 Section {
                     LabeledContent("Read", value: identity.enrolledAt.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("Access", value: "Basic Access Control")
                     LabeledContent("Check Digits", value: r.failedChecks.isEmpty ? "Valid" : "Failed: \(r.failedChecks.joined(separator: ", "))")
                 } header: {
-                    Text("Chip")
+                    PaperHeading("Chip")
                 } footer: {
-                    Text(identity.sample
+                    PaperFootnote(identity.sample
                          ? "This is the ICAO sample passport, read from a chip built into Passport."
                          : "Read directly from the chip in your document over NFC.")
                 }
+                .paperRows()
                 Section {
                     LabeledContent("Registry", value: identity.onChain == nil ? "On this iPhone" : "Solana")
                     if let onChain = identity.onChain {
@@ -61,12 +68,13 @@ struct DocumentDetails: View {
                     }
                     LabeledContent("Proof System", value: "Groth16 · BN254")
                 } header: {
-                    Text("Proofs")
+                    PaperHeading("Proofs")
                 } footer: {
-                    Text(identity.onChain == nil
+                    PaperFootnote(identity.onChain == nil
                          ? "Development: proofs are checked against a registry kept on this iPhone. Relying parties should not accept them as evidence. Verify your passport to enroll it in the registry."
                          : "Proofs are checked against the passport registry on Solana. Its keys come from a development setup until the trusted setup ceremony is done.")
                 }
+                .paperRows()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Document Details")
@@ -84,6 +92,7 @@ struct DocumentDetails: View {
         }
         .frame(width: 120, height: 150)
         .clipShape(.rect(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Paper.gold.opacity(0.6), lineWidth: 1))
         .accessibilityLabel("Photo from the chip")
     }
 
@@ -106,19 +115,22 @@ struct PresentationDetail: View {
             Section {
                 VStack(spacing: 8) {
                     VerifierBadge(name: presentation.verifier, size: 56)
-                    Text(presentation.verifier).font(.title3.bold())
+                    Text(presentation.verifier).font(.engraved(.title3, weight: .bold))
                     Text(presentation.date.formatted(date: .long, time: .shortened))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Paper.faded)
                 }
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
             }
-            Section("Shared") {
+            Section {
                 ForEach(presentation.shared, id: \.self) { item in
                     LabeledContent(item.label, value: item.display)
                 }
+            } header: {
+                PaperHeading("Shared")
             }
+            .paperRows()
             Section {
                 LabeledContent("Sent To", value: presentation.recipient)
                 LabeledContent("Proved In", value: "\(presentation.millis) ms")
@@ -127,8 +139,9 @@ struct PresentationDetail: View {
                     copied = true
                 }
             } footer: {
-                Text("The proof is all \(presentation.verifier) received. It shows the answers above are true for a passport enrolled on this iPhone, without revealing which one.")
+                PaperFootnote("The proof is all \(presentation.verifier) received. It shows the answers above are true for a passport enrolled on this iPhone, without revealing which one.")
             }
+            .paperRows()
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Shared")
@@ -141,12 +154,20 @@ struct PagePlaceholder: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ContentUnavailableView {
-            Label(model.identity == nil ? "No Passport" : "No Requests", systemImage: "checkmark.shield")
-        } description: {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(Paper.gold)
+            Text(model.identity == nil ? "No Passport" : "No Requests")
+                .font(.engraved(.title2, weight: .bold))
             Text(model.identity == nil
                  ? "Add a passport to answer requests from websites and apps."
                  : "Requests from websites and apps open here.")
+                .font(.callout)
+                .foregroundStyle(Paper.faded)
+                .multilineTextAlignment(.center)
         }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

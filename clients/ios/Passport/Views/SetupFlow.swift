@@ -304,7 +304,9 @@ private struct DoneStep: View {
         VStack(spacing: 0) {
             Spacer()
             if let identity = model.identity {
-                PassportCard(identity: identity, portrait: model.portrait, masked: !model.showsPrivateDetails)
+                DataPage(identity: identity, portrait: model.portrait, masked: !model.showsPrivateDetails)
+                    .padding(.horizontal, 12)
+                    .paperPanel()
                     .frame(maxWidth: 360)
                     .padding(.horizontal, 32)
                     .scaleEffect(appeared ? 1 : 0.92)
